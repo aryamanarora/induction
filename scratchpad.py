@@ -29,6 +29,23 @@ def get_induction_candidate_mask(
     return res
 
 
+def decode_and_highlight(toks_to_decode, highlight_ixes, tokenizer):
+    if len(toks_to_decode.shape) == 1:
+        toks_to_decode = toks_to_decode.unsqueeze(0)
+    res = []
+    for row in toks_to_decode:
+        row_toks = []
+        for i, ch in enumerate(row):
+            if highlight_ixes[ch]:
+                row_toks += [58, 58, 58]
+                row_toks.append(ch)
+                row_toks += [60, 60, 60]
+            else:
+                row_toks.append(ch)
+        res.append("".join(tokenizer.batch_decode(row_toks)))
+    return res
+
+
 # %%
 get_induction_candidate_mask(a, good_induction_candidates, match_all_occurrences=True)
 # %%

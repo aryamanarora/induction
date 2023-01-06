@@ -198,43 +198,28 @@ def get_inputs_from_model(model: rc.Circuit):
 loss, good_induction_candidate, tokenizer, toks_int_values = construct_circuit()
 with_a1_ind_inputs = clean_model(loss)
 
-# # UNSCRUBBED
-# corr = Correspondence()
-# i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-# corr.add(i_root, corr_root_matcher)
-
-# res, scrubbed_circuit, mean_losses = run_hypothesis(
-#     with_a1_ind_inputs, toks_int_values, corr, good_induction_candidate, tokenizer=tokenizer, p=False
-# )
-# tokens = get_inputs_from_model(scrubbed_circuit.circuit)
-
-# print("UNSCRUBBED")
-# pprint(mean_losses)
-
-# # BASELINE
-# a1_ind = i_root.make_descendant(UncondSampler(), name="a1.ind")
-# corr.add(a1_ind, rc.IterativeMatcher("a1.ind"))
-
-# res, scrubbed_circuit, mean_losses = run_hypothesis(with_a1_ind_inputs, toks_int_values, corr, good_induction_candidate)
-# print("BASELINE")
-# pprint(mean_losses)
-
-#
+# UNSCRUBBED
 corr = Correspondence()
 i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-v = i_root.make_descendant(UncondSampler(), name="a1.ind.v_input")
 corr.add(i_root, corr_root_matcher)
-corr.add(
-    v,
-    rc.IterativeMatcher("a1.ind")
-    .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-    .children_matcher({3})
-    .chain("b0.a"),
+
+res, scrubbed_circuit, mean_losses = run_hypothesis(
+    with_a1_ind_inputs, toks_int_values, corr, good_induction_candidate, tokenizer=tokenizer, p=False
 )
+tokens = get_inputs_from_model(scrubbed_circuit.circuit)
+
+print("UNSCRUBBED")
+pprint(mean_losses)
+
+# BASELINE
+a1_ind = i_root.make_descendant(UncondSampler(), name="a1.ind")
+corr.add(a1_ind, rc.IterativeMatcher("a1.ind"))
 
 res, scrubbed_circuit, mean_losses = run_hypothesis(with_a1_ind_inputs, toks_int_values, corr, good_induction_candidate)
-print("EMBEDDING-VALUE")
+print("BASELINE")
 pprint(mean_losses)
+
+#
 
 torch.cuda.empty_cache()
 
