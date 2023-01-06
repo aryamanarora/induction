@@ -166,11 +166,8 @@ def run_hypothesis(
     eval_settings = ExperimentEvalSettings(device_dtype=DEVICE, run_on_all=False)
     all_inps = []
     all_res = []
-    run_iter = range(runs) if verbose else tqdm(range(runs))
-    for i in run_iter:
+    for i in tqdm(range(runs)):
         run_seed = seed + i
-        if verbose:
-            print(f"Run {i+1} of {runs} with seed {run_seed}")
         exp = Experiment(circuit, ds, correspondence, samples, random_seed=run_seed)
         scrubbed_circuit = exp.scrub()
         inps = get_inputs_from_model(scrubbed_circuit.circuit)
@@ -194,8 +191,12 @@ def run_hypothesis(
     if verbose:
         print("Building induction candidates masks")
     ind_candidates_mask, ind_candidates_later_occur_mask = get_induction_candidate_masks(
-        inps[:, :-1], good_induction_candidates
+        inps[:, 1:], good_induction_candidates
     )
+    import pickle
+
+    with open(f"data/logs_unscrubbed_seed_{seed}_runs_{runs}_shifted_mask.pkl", "wb") as f:
+        pickle.dump((res, inps, ind_candidates_mask, ind_candidates_later_occur_mask), f)
     return res, ind_candidates_mask, ind_candidates_later_occur_mask, scrubbed_circuit
 
 
