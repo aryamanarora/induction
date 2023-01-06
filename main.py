@@ -25,6 +25,8 @@ from interp.circuit.causal_scrubbing.testing_utils import IntDataset
 from interp.circuit.causal_scrubbing.experiment import Experiment, ExperimentEvalSettings, ScrubbedExperiment
 from interp.circuit.causal_scrubbing.dataset import color_dataset, Dataset
 from torch.testing import assert_close
+from collections import defaultdict
+from tqdm import tqdm
 
 MAIN = __name__ == "__main__"
 DEVICE = "cuda:0"
@@ -88,27 +90,28 @@ def construct_circuit():
     return loss, good_induction_candidate, tokenizer, toks_int_values
 
 
-def get_induction_candidate_mask(
-    t: torch.Tensor, good_induction_candidates: torch.Tensor, match_all_occurrences=False
-) -> torch.Tensor:
+def get_induction_candidate_masks(
+    t: torch.Tensor, good_induction_candidates: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor]:
     """
     t is a 2d Tensor of token indices of size batch_size x seq_len
     good_induction_candidate is a 1d Tensor of 0s and 1s of size vocab_size indicating whether the ith token is a good induction candidate in general
-    Return a 2d Tensor of bools indicating whether each token in t is a repeated occurrence of a good induction candidate in that row (or, if match_all_occurrences is True, we also set the first occurrence of the token to True)
+    Return two 2d Tensors of bools indicating whether each token in t is a good induction candidate in that row (in the second tensor, we exclude first occurrences of each token in each row)
     """
-    res = torch.ones_like(t, dtype=torch.bool)
+    res_all = torch.zeros_like(t, dtype=torch.bool)
+    res_later = torch.zeros_like(t, dtype=torch.bool)
     good_induction_candidates = good_induction_candidates.to(dtype=torch.bool)
     # Sorry, couldn't find anything better than a double-for
-    for i, row in enumerate(t):
+    for i, row in tqdm(enumerate(t), total=t.shape[0]):
         seen_toks = set()
         for j, tok in enumerate(row):
-            if tok.item() in seen_toks or match_all_occurrences:
-                res[i, j] = good_induction_candidates[tok]
-            else:
+            if good_induction_candidates[tok]:
+                res_all[i, j] = True
+                if tok.item() in seen_toks:
+                    res_later[i, j] = True
                 seen_toks.add(tok.item())
-                res[i, j] = False
 
-    return res
+    return res_all, res_later
 
 
 # Split by heads, rename, conform
@@ -153,41 +156,47 @@ def run_hypothesis(
     good_induction_candidates,
     samples=100,
     tokenizer=None,
-    p=False,
+    verbose=0,
+    seed: int = 42,
+    runs: int = 1,
 ):
+    if verbose:
+        print("Running hypothesis")
     ds = Dataset({"toks_int_var": toks})
     eval_settings = ExperimentEvalSettings(device_dtype=DEVICE, run_on_all=False)
-    exp = Experiment(circuit, ds, correspondence, samples, random_seed=42)
-    scrubbed_circuit = exp.scrub()
-    if p:
-        scrubbed_circuit.print()
+    all_inps = []
+    all_res = []
+    run_iter = range(runs) if verbose else tqdm(range(runs))
+    for i in run_iter:
+        run_seed = seed + i
+        if verbose:
+            print(f"Run {i+1} of {runs} with seed {run_seed}")
+        exp = Experiment(circuit, ds, correspondence, samples, random_seed=run_seed)
+        scrubbed_circuit = exp.scrub()
+        inps = get_inputs_from_model(scrubbed_circuit.circuit)
+        res = scrubbed_circuit.evaluate(eval_settings)
 
-    inps = get_inputs_from_model(scrubbed_circuit.circuit)
-    res = scrubbed_circuit.evaluate(eval_settings)
-    overall_mean_loss = res.mean()
-    ind_candidates_mask = get_induction_candidate_mask(
-        inps[:, :-1], good_induction_candidates, match_all_occurrences=True
-    )
-    if tokenizer is not None and p:
-        pprint(tokenizer.batch_decode(inps))
-        binps = inps.clone()
-        binps[get_induction_candidate_mask(inps, good_induction_candidates, match_all_occurrences=True)] = inps[0][0]
-        pprint(tokenizer.batch_decode(binps))
+        if verbose == 2:
+            scrubbed_circuit.print()
+            if tokenizer is not None:
+                pprint(tokenizer.batch_decode(inps))
+                binps = inps.clone()
+                binps[get_induction_candidate_masks(inps, good_induction_candidates)[0]] = inps[0][0]
+                pprint(tokenizer.batch_decode(binps))
 
-    ind_candidates_mean_loss = (res[ind_candidates_mask]).mean()
-    ind_candidates_later_occurr_mask = get_induction_candidate_mask(
-        inps[:, :-1], good_induction_candidates, match_all_occurrences=False
+        all_inps.append(inps)
+        all_res.append(res)
+
+    if verbose:
+        print("Concatting inps and res")
+    inps = torch.concat(all_inps, dim=0)
+    res = torch.concat(all_res, dim=0)
+    if verbose:
+        print("Building induction candidates masks")
+    ind_candidates_mask, ind_candidates_later_occur_mask = get_induction_candidate_masks(
+        inps[:, :-1], good_induction_candidates
     )
-    ind_candidates_later_occurr_mean_loss = (res[ind_candidates_later_occurr_mask]).mean()
-    mean_losses = {
-        "overall": (overall_mean_loss.item(), (res.shape[0] * res.shape[1])),
-        "candidates_all": (ind_candidates_mean_loss.item(), ind_candidates_mask.sum().item()),
-        "candidates_later": (
-            ind_candidates_later_occurr_mean_loss.item(),
-            ind_candidates_later_occurr_mask.sum().item(),
-        ),
-    }
-    return res, scrubbed_circuit, mean_losses
+    return res, ind_candidates_mask, ind_candidates_later_occur_mask, scrubbed_circuit
 
 
 def get_inputs_from_model(model: rc.Circuit):
@@ -195,47 +204,22 @@ def get_inputs_from_model(model: rc.Circuit):
     return data.evaluate()
 
 
-loss, good_induction_candidate, tokenizer, toks_int_values = construct_circuit()
-with_a1_ind_inputs = clean_model(loss)
+def run_experiment(exps, exp_name: str, model: rc.Circuit, toks, candidates, tokenizer, runs: int = 1):
+    mean_overall_losses = defaultdict(lambda: torch.zeros(2))
+    res, ind_candidates_mask, ind_candidates_later_occur_mask, scrubbed_circuit = run_hypothesis(
+        model, toks, exps[exp_name], candidates, tokenizer=tokenizer, verbose=1, seed=42, runs=runs
+    )
+    print(exp_name.upper())
+    print("OVERALL")
+    print(f"{res.mean():.3f}\t{res.var():.3f}\t{res.shape[0] * res.shape[1]}")
 
-# # UNSCRUBBED
-# corr = Correspondence()
-# i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-# corr.add(i_root, corr_root_matcher)
+    print("CANDIDATES")
+    c_res = res[ind_candidates_mask]
+    print(f"{c_res.mean():.3f}\t{c_res.var():.3f}\t{c_res.shape[0]}")
 
-# res, scrubbed_circuit, mean_losses = run_hypothesis(
-#     with_a1_ind_inputs, toks_int_values, corr, good_induction_candidate, tokenizer=tokenizer, p=False
-# )
-# tokens = get_inputs_from_model(scrubbed_circuit.circuit)
+    print("LATER CANDIDATES")
+    lc_res = res[ind_candidates_later_occur_mask]
+    print(f"{lc_res.mean():.3f}\t{lc_res.var():.3f}\t{lc_res.shape[0]}")
 
-# print("UNSCRUBBED")
-# pprint(mean_losses)
-
-# # BASELINE
-# a1_ind = i_root.make_descendant(UncondSampler(), name="a1.ind")
-# corr.add(a1_ind, rc.IterativeMatcher("a1.ind"))
-
-# res, scrubbed_circuit, mean_losses = run_hypothesis(with_a1_ind_inputs, toks_int_values, corr, good_induction_candidate)
-# print("BASELINE")
-# pprint(mean_losses)
-
-#
-corr = Correspondence()
-i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-v = i_root.make_descendant(UncondSampler(), name="a1.ind.v_input")
-corr.add(i_root, corr_root_matcher)
-corr.add(
-    v,
-    rc.IterativeMatcher("a1.ind")
-    .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-    .children_matcher({3})
-    .chain("b0.a"),
-)
-
-res, scrubbed_circuit, mean_losses = run_hypothesis(with_a1_ind_inputs, toks_int_values, corr, good_induction_candidate)
-print("EMBEDDING-VALUE")
-pprint(mean_losses)
-
-torch.cuda.empty_cache()
 
 # %%
