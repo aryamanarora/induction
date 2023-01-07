@@ -153,7 +153,7 @@ def run_hypothesis(
     toks: rc.Array,
     correspondence: Correspondence,
     good_induction_candidates,
-    samples=1,
+    samples=100,
     tokenizer=None,
     verbose=0,
     seed: int = 42,
@@ -162,15 +162,15 @@ def run_hypothesis(
     if verbose:
         print("Running hypothesis")
     ds = Dataset({"toks_int_var": toks})
-    eval_settings = ExperimentEvalSettings(device_dtype=DEVICE, run_on_all=False)
+    eval_settings = ExperimentEvalSettings(device_dtype=DEVICE, run_on_all=True)
     all_inps = []
     all_res = []
     for i in tqdm(range(runs)):
         run_seed = seed + i
-        exp = Experiment(circuit, ds, correspondence, random_seed=run_seed)
+        exp = Experiment(circuit, ds, correspondence, num_examples=samples, random_seed=run_seed)
         scrubbed_circuit = exp.scrub()
         inps = get_inputs_from_model(scrubbed_circuit.circuit)
-        res = scrubbed_circuit.evaluate(eval_settings, num_samples=samples)
+        res = scrubbed_circuit.evaluate(eval_settings)
 
         if verbose == 2:
             scrubbed_circuit.print()
