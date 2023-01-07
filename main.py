@@ -192,10 +192,7 @@ def run_hypothesis(
     ind_candidates_mask, ind_candidates_later_occur_mask = get_induction_candidate_masks(
         inps[:, :-1], good_induction_candidates
     )
-    import pickle
 
-    with open(f"data/logs_unscrubbed_seed_{seed}_runs_{runs}_shifted_mask.pkl", "wb") as f:
-        pickle.dump((res, inps, ind_candidates_mask, ind_candidates_later_occur_mask), f)
     return res, ind_candidates_mask, ind_candidates_later_occur_mask, scrubbed_circuit
 
 
