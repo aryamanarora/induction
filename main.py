@@ -43,13 +43,12 @@ def construct_circuit():
     def load_model_and_data():
         model_id = "attention_only_2"
         (loaded, tokenizer, extra_args) = load_model_id(model_id)
-
         toks_int_values: rc.Array
         P = rc.Parser()
-        toks_int_values = P("'toks_int_var' [104091,301] Array 3f36c4ca661798003df14994").as_array_unwrap()
+        toks_int_values = P("'toks_int_var' [104091,301] Array 3f36c4ca661798003df14994")
         toks_int_values = rc.cast_circuit(
             toks_int_values, rc.TorchDeviceDtypeOp(device=DEVICE, dtype="int64")
-        ).as_array_unwrap()
+        ).cast_array()
         loaded = {s: rc.cast_circuit(c, rc.TorchDeviceDtypeOp(device=DEVICE)) for (s, c) in loaded.items()}
 
         orig_circuit = loaded["t.bind_w"]
@@ -70,7 +69,7 @@ def construct_circuit():
     # feed input tokens to model (after embedding + causal mask)
     idxed_embeds = rc.GeneralFunction.gen_index(tok_embeds, input_toks, index_dim=0, name="idxed_embeds")
     causal_mask = rc.Array(
-        (torch.arange(seq_len)[:, None] >= torch.arange(seq_len)[None, :]).to(tok_embeds.as_array_unwrap().value),
+        (torch.arange(seq_len)[:, None] >= torch.arange(seq_len)[None, :]).to(tok_embeds.cast_array().value),
         f"t.a.c.causal_mask",
     )
     pos_embeds = pos_embeds.index(I[:seq_len], name="t.w.pos_embeds_idxed")
@@ -138,11 +137,11 @@ def clean_model(expected_loss_old: rc.Circuit):
     expected_loss = rc.conform_all_modules(expected_loss)
 
     with_a1_ind_inputs = (
-        expected_loss.update("a1.ind_sum.norm_call", lambda c: c.as_module_unwrap().substitute())
-        .update("b1.a.ind_sum", lambda c: c.as_module_unwrap().substitute())
-        .update("t.call", lambda c: c.as_module_unwrap().substitute())
-        .update("a1.not_ind_sum.norm_call", lambda c: c.as_module_unwrap().substitute())
-        .update("b1.a.not_ind_sum", lambda c: c.as_module_unwrap().substitute())
+        expected_loss.update("a1.ind_sum.norm_call", lambda c: c.cast_module().substitute())
+        .update("b1.a.ind_sum", lambda c: c.cast_module().substitute())
+        .update("t.call", lambda c: c.cast_module().substitute())
+        .update("a1.not_ind_sum.norm_call", lambda c: c.cast_module().substitute())
+        .update("b1.a.not_ind_sum", lambda c: c.cast_module().substitute())
     )
     with_a1_ind_inputs.print_html()
     return with_a1_ind_inputs
@@ -154,7 +153,7 @@ def run_hypothesis(
     toks: rc.Array,
     correspondence: Correspondence,
     good_induction_candidates,
-    samples=100,
+    samples=1,
     tokenizer=None,
     verbose=0,
     seed: int = 42,
@@ -168,10 +167,10 @@ def run_hypothesis(
     all_res = []
     for i in tqdm(range(runs)):
         run_seed = seed + i
-        exp = Experiment(circuit, ds, correspondence, samples, random_seed=run_seed)
+        exp = Experiment(circuit, ds, correspondence, random_seed=run_seed)
         scrubbed_circuit = exp.scrub()
         inps = get_inputs_from_model(scrubbed_circuit.circuit)
-        res = scrubbed_circuit.evaluate(eval_settings)
+        res = scrubbed_circuit.evaluate(eval_settings, num_samples=samples)
 
         if verbose == 2:
             scrubbed_circuit.print()
@@ -191,7 +190,7 @@ def run_hypothesis(
     if verbose:
         print("Building induction candidates masks")
     ind_candidates_mask, ind_candidates_later_occur_mask = get_induction_candidate_masks(
-        inps[:, 1:], good_induction_candidates
+        inps[:, :-1], good_induction_candidates
     )
     import pickle
 
@@ -221,6 +220,4 @@ def run_experiment(exps, exp_name: str, model: rc.Circuit, toks, candidates, tok
     print("LATER CANDIDATES")
     lc_res = res[ind_candidates_later_occur_mask]
     print(f"{lc_res.mean():.3f}\t{lc_res.var():.3f}\t{lc_res.shape[0]}")
-
-
 # %%
