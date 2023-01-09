@@ -44,9 +44,9 @@ def construct_circuit():
         model_id = "attention_only_2"
         (loaded, tokenizer, extra_args) = load_model_id(model_id)
 
-        toks_int_values: rc.Array
         P = rc.Parser()
-        toks_int_values = P("'toks_int_var' [104091,301] Array 3f36c4ca661798003df14994").as_array_unwrap()
+        toks_int_values = P("'toks_int_var' [104091,301] Array 3f36c4ca661798003df14994")
+        toks_int_values = toks_int_values.as_array_unwrap()
         toks_int_values = rc.cast_circuit(
             toks_int_values, rc.TorchDeviceDtypeOp(device=DEVICE, dtype="int64")
         ).as_array_unwrap()
@@ -163,7 +163,7 @@ def run_hypothesis(
     if verbose:
         print("Running hypothesis")
     ds = Dataset({"toks_int_var": toks})
-    eval_settings = ExperimentEvalSettings(device_dtype=DEVICE, run_on_all=False)
+    eval_settings = ExperimentEvalSettings(device_dtype=DEVICE, run_on_all=True)
     all_inps = []
     all_res = []
     run_iter = range(runs) if verbose else tqdm(range(runs))
@@ -173,8 +173,8 @@ def run_hypothesis(
             print(f"Run {i+1} of {runs} with seed {run_seed}")
         exp = Experiment(circuit, ds, correspondence, samples, random_seed=run_seed)
         scrubbed_circuit = exp.scrub()
-        inps = get_inputs_from_model(scrubbed_circuit.circuit)
         res = scrubbed_circuit.evaluate(eval_settings)
+        inps = get_inputs_from_model(scrubbed_circuit.circuit)
 
         if verbose == 2:
             scrubbed_circuit.print()
@@ -216,10 +216,21 @@ def run_experiment(exps, exp_name: str, model: rc.Circuit, toks, candidates, tok
     print("CANDIDATES")
     c_res = res[ind_candidates_mask]
     print(f"{c_res.mean():.3f}\t{c_res.var():.3f}\t{c_res.shape[0]}")
+    print(f"unnormed {(res * ind_candidates_mask).mean():.3f}")
 
     print("LATER CANDIDATES")
     lc_res = res[ind_candidates_later_occur_mask]
     print(f"{lc_res.mean():.3f}\t{lc_res.var():.3f}\t{lc_res.shape[0]}")
+
+    # import plotly.express as px
+    # import pandas as pd
+    # import numpy as np
+
+    # x0 = lc_res.cpu().numpy()
+    # x1 = res.flatten().cpu().numpy()
+    # df = pd.DataFrame(dict(series=np.concatenate((["a"] * len(x0), ["b"] * len(x1))), data=np.concatenate((x0, x1))))
+    # fig = px.histogram(df, x="data", color="series", barmode="overlay")
+    # fig.write_image("test.png")
 
 
 # %%
