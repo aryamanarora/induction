@@ -114,19 +114,34 @@ def get_induction_candidate_masks(
     return res_all, res_later
 
 
+split_head_configs = {
+    "labelled": {
+        0: [(0, "yes_prev"), (S[1:], "not_prev")],
+        1: [
+            (S[5:7], "ind"),
+            (torch.tensor([0, 1, 2, 3, 4, 7]).to(DEVICE), "not_ind"),
+        ],
+    },
+    "all": {0: [(i, f"head{i}") for i in range(8)], 1: [(i, f"head{i}") for i in range(8)]},
+    "b0-all": {
+        0: [(i, f"head{i}") for i in range(8)],
+        1: [
+            (S[5:7], "ind"),
+            (torch.tensor([0, 1, 2, 3, 4, 7]).to(DEVICE), "not_ind"),
+        ],
+    },
+}
+
 # Split by heads, rename, conform
 @torch.inference_mode()
-def clean_model(expected_loss_old: rc.Circuit):
+def clean_model(expected_loss_old: rc.Circuit, split_heads: str = "labelled"):
+    assert split_heads in list(split_head_configs.keys())
+    split_head_config = split_head_configs[split_heads]
+
     by_head = configure_transformer(
         expected_loss_old.get_unique("t.bind_w"),
         to=To.ATTN_HEAD_MLP_NORM,
-        split_by_head_config={
-            0: [(0, "prev"), (S[1:], "not_prev")],
-            1: [
-                (S[5:7], "ind"),
-                (torch.tensor([0, 1, 2, 3, 4, 7]).to(DEVICE), "not_ind"),
-            ],
-        },
+        split_by_head_config=split_head_config,
         use_pull_up_head_split=True,
         check_valid=True,
     )
@@ -144,7 +159,6 @@ def clean_model(expected_loss_old: rc.Circuit):
         .update("a1.not_ind_sum.norm_call", lambda c: c.as_module_unwrap().substitute())
         .update("b1.a.not_ind_sum", lambda c: c.as_module_unwrap().substitute())
     )
-    with_a1_ind_inputs.print_html()
     return with_a1_ind_inputs
 
 
@@ -204,23 +218,25 @@ def get_inputs_from_model(model: rc.Circuit):
     return data.evaluate()
 
 
-def run_experiment(exps, exp_name: str, model: rc.Circuit, toks, candidates, tokenizer, runs: int = 1):
+def run_experiment(
+    exps, exp_name: str, model: rc.Circuit, toks, candidates, tokenizer, runs: int = 1, verbose: int = 0
+):
     mean_overall_losses = defaultdict(lambda: torch.zeros(2))
     res, ind_candidates_mask, ind_candidates_later_occur_mask, scrubbed_circuit = run_hypothesis(
-        model, toks, exps[exp_name], candidates, tokenizer=tokenizer, verbose=1, seed=42, runs=runs
+        model, toks, exps[exp_name][0], candidates, tokenizer=tokenizer, verbose=verbose, seed=42, runs=runs
     )
     print(exp_name.upper())
     print("OVERALL")
-    print(f"{res.mean():.3f}\t{res.var():.3f}\t{res.shape[0] * res.shape[1]}")
+    print(f"{res.mean().item():>10.3f}{res.var().item():>10.3f}{res.shape[0] * res.shape[1]:>10}")
 
     print("CANDIDATES")
     c_res = res[ind_candidates_mask]
-    print(f"{c_res.mean():.3f}\t{c_res.var():.3f}\t{c_res.shape[0]}")
-    print(f"unnormed {(res * ind_candidates_mask).mean():.3f}")
+    print(f"{c_res.mean().item():>10.3f}{c_res.var().item():>10.3f}{c_res.shape[0]:>10}")
+    # print(f"unnormed {(res * ind_candidates_mask).mean():.3f}")
 
     print("LATER CANDIDATES")
     lc_res = res[ind_candidates_later_occur_mask]
-    print(f"{lc_res.mean():.3f}\t{lc_res.var():.3f}\t{lc_res.shape[0]}")
+    print(f"{lc_res.mean().item():>10.3f}{lc_res.var().item():>10.3f}{lc_res.shape[0]:>10}")
 
     # import plotly.express as px
     # import pandas as pd
