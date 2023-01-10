@@ -73,62 +73,41 @@ def make_experiments() -> dict[str, tuple[Correspondence, dict[str, Optional[str
     # ALL (3 og scrubbing)
     res["all"] = make_corr([ev, eq, pth_k])
 
+    # a0.7
+    res["a0.7"] = make_corr([rc.IterativeMatcher("b0.a.head7")], options={"split_heads": "b0-all"})
+    res["a0.0"] = make_corr([rc.IterativeMatcher("b0.a.head0")], options={"split_heads": "b0-all"})
+
     return res
 
 
 def a0_heads_to_v() -> dict[str, tuple[Correspondence, dict[str, Optional[str]]]]:
     """Check performance when scrubbing each head in layer 0 as input to a1_ind.k"""
-    exps = {}
-    v_matcher = (
-        rc.IterativeMatcher("a1.ind").chain(rc.restrict("a.head.on_inp", term_if_matches=True)).children_matcher({3})
-    )
 
     def make_corr_v(args: list[rc.IterativeMatcher]):
         """Make corr but split heads individually"""
         return make_corr(args, options={"split_heads": "b0-all"})
 
-    def match(head: int):
+    def m(head: int):
         return rc.IterativeMatcher(f"b0.a.head{head}")
 
+    exps = {}
+    v_matcher = (
+        rc.IterativeMatcher("a1.ind").chain(rc.restrict("a.head.on_inp", term_if_matches=True)).children_matcher({3})
+    )
+    embeds = rc.restrict("idxed_embeds", term_early_at="b0.a")
+
+    # scrub each head individually
     for i in range(8):
-        exps[f"a0-v-{i}"] = make_corr_v(
-            [v_matcher.chain(rc.restrict("idxed_embeds", term_early_at="b0.a") | rc.IterativeMatcher(f"b0.a.head{i}"))]
-        )
+        exps[f"a0-v-{i}"] = make_corr_v([v_matcher.chain(embeds | rc.IterativeMatcher(f"b0.a.head{i}"))])
 
-    exps[f"a0-v-0,6"] = make_corr_v(
-        [v_matcher.chain(rc.restrict("idxed_embeds", term_early_at="b0.a") | match(0) | match(6))]
-    )
-    exps[f"a0-v-only0,6"] = make_corr_v([v_matcher.chain(match(0) | match(6))])
-
-    exps[f"a0-v-not0,6"] = make_corr_v(
-        [
-            v_matcher.chain(
-                rc.restrict("idxed_embeds", term_early_at="b0.a")
-                | match(1)
-                | match(2)
-                | match(3)
-                | match(4)
-                | match(5)
-                | match(7)
-            )
-        ]
-    )
-
-    exps[f"a0-v-onlynot0,6"] = make_corr_v(
-        [v_matcher.chain(match(1) | match(2) | match(3) | match(4) | match(5) | match(7))]
-    )
-
-    exps[f"a0-v-all-bad-but-2"] = make_corr_v(
-        [
-            v_matcher.chain(
-                rc.restrict("idxed_embeds", term_early_at="b0.a") | match(1) | match(3) | match(4) | match(5) | match(7)
-            )
-        ]
-    )
-
-    exps[f"a0-v-all-bad-but-12"] = make_corr_v(
-        [v_matcher.chain(rc.restrict("idxed_embeds", term_early_at="b0.a") | match(3) | match(4) | match(5) | match(7))]
-    )
+    # scrub subsets of heads
+    exps[f"a0-v-0,6"] = make_corr_v([v_matcher.chain(embeds | m(0) | m(6))])
+    exps[f"a0-v-only0,6"] = make_corr_v([v_matcher.chain(m(0) | m(6))])
+    exps[f"a0-v-only016"] = make_corr_v([v_matcher.chain(m(0) | m(1) | m(6))])
+    exps[f"a0-v-not0,6"] = make_corr_v([v_matcher.chain(embeds | m(1) | m(2) | m(3) | m(4) | m(5) | m(7))])
+    exps[f"a0-v-onlynot0,6"] = make_corr_v([v_matcher.chain(m(1) | m(2) | m(3) | m(4) | m(5) | m(7))])
+    exps[f"a0-v-all-bad-but-2"] = make_corr_v([v_matcher.chain(embeds | m(1) | m(3) | m(4) | m(5) | m(7))])
+    exps[f"a0-v-all-bad-but-12"] = make_corr_v([v_matcher.chain(embeds | m(3) | m(4) | m(5) | m(7))])
 
     return exps
 

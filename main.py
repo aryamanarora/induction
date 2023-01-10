@@ -1,4 +1,3 @@
-# %%
 import os
 import subprocess
 import sys
@@ -247,6 +246,3 @@ def run_experiment(
     # df = pd.DataFrame(dict(series=np.concatenate((["a"] * len(x0), ["b"] * len(x1))), data=np.concatenate((x0, x1))))
     # fig = px.histogram(df, x="data", color="series", barmode="overlay")
     # fig.write_image("test.png")
-
-
-# %%
