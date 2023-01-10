@@ -46,10 +46,9 @@ def construct_circuit():
 
         P = rc.Parser()
         toks_int_values = P("'toks_int_var' [104091,301] Array 3f36c4ca661798003df14994")
-        toks_int_values = toks_int_values.as_array_unwrap()
         toks_int_values = rc.cast_circuit(
             toks_int_values, rc.TorchDeviceDtypeOp(device=DEVICE, dtype="int64")
-        ).as_array_unwrap()
+        ).cast_array()
         loaded = {s: rc.cast_circuit(c, rc.TorchDeviceDtypeOp(device=DEVICE)) for (s, c) in loaded.items()}
 
         orig_circuit = loaded["t.bind_w"]
@@ -70,7 +69,7 @@ def construct_circuit():
     # feed input tokens to model (after embedding + causal mask)
     idxed_embeds = rc.GeneralFunction.gen_index(tok_embeds, input_toks, index_dim=0, name="idxed_embeds")
     causal_mask = rc.Array(
-        (torch.arange(seq_len)[:, None] >= torch.arange(seq_len)[None, :]).to(tok_embeds.as_array_unwrap().value),
+        (torch.arange(seq_len)[:, None] >= torch.arange(seq_len)[None, :]).to(tok_embeds.cast_array().value),
         f"t.a.c.causal_mask",
     )
     pos_embeds = pos_embeds.index(I[:seq_len], name="t.w.pos_embeds_idxed")
@@ -153,11 +152,11 @@ def clean_model(expected_loss_old: rc.Circuit, split_heads: str = "labelled"):
     expected_loss = rc.conform_all_modules(expected_loss)
 
     with_a1_ind_inputs = (
-        expected_loss.update("a1.ind_sum.norm_call", lambda c: c.as_module_unwrap().substitute())
-        .update("b1.a.ind_sum", lambda c: c.as_module_unwrap().substitute())
-        .update("t.call", lambda c: c.as_module_unwrap().substitute())
-        .update("a1.not_ind_sum.norm_call", lambda c: c.as_module_unwrap().substitute())
-        .update("b1.a.not_ind_sum", lambda c: c.as_module_unwrap().substitute())
+        expected_loss.update("a1.ind_sum.norm_call", lambda c: c.cast_module().substitute())
+        .update("b1.a.ind_sum", lambda c: c.cast_module().substitute())
+        .update("t.call", lambda c: c.cast_module().substitute())
+        .update("a1.not_ind_sum.norm_call", lambda c: c.cast_module().substitute())
+        .update("b1.a.not_ind_sum", lambda c: c.cast_module().substitute())
     )
     return with_a1_ind_inputs
 
