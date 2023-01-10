@@ -123,8 +123,9 @@ def main():
     parser.add_argument(
         "--exp", action="store", dest="exp_name", type=str, choices=list(experiments.keys()), default="unscrubbed"
     )
-    parser.add_argument("--runs", action="store", dest="runs", type=int, default=1)
+    parser.add_argument("--samples", action="store", dest="samples", type=int, default=10000)
     parser.add_argument("--verbose", action="store", dest="verbose", type=int, default=0)
+    parser.add_argument("--save", action="store_true", dest="save")
     args = parser.parse_args()
     print(args)
 
@@ -139,13 +140,12 @@ def main():
         toks_int_values,
         good_induction_candidate,
         tokenizer,
-        runs=args.runs,
         verbose=args.verbose,
+        samples=args.samples,
+        save_results=args.save,
     )
     torch.cuda.empty_cache()
 
 
 if __name__ == "__main__":
     main()
-
-# %%

@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 import uuid
+import pickle
 from pprint import pprint
 import rust_circuit as rc
 import torch
@@ -167,48 +168,40 @@ def run_hypothesis(
     toks: rc.Array,
     correspondence: Correspondence,
     good_induction_candidates,
-    samples=100,
+    samples=10000,
     tokenizer=None,
     verbose=0,
     seed: int = 42,
-    runs: int = 1,
+    save_name="",
 ):
     if verbose:
         print("Running hypothesis")
     ds = Dataset({"toks_int_var": toks})
-    eval_settings = ExperimentEvalSettings(device_dtype=DEVICE, run_on_all=True)
-    all_inps = []
-    all_res = []
-    run_iter = range(runs) if verbose else tqdm(range(runs))
-    for i in run_iter:
-        run_seed = seed + i
-        if verbose:
-            print(f"Run {i+1} of {runs} with seed {run_seed}")
-        exp = Experiment(circuit, ds, correspondence, samples, random_seed=run_seed)
-        scrubbed_circuit = exp.scrub()
-        res = scrubbed_circuit.evaluate(eval_settings)
-        inps = get_inputs_from_model(scrubbed_circuit.circuit)
+    eval_settings = ExperimentEvalSettings(device_dtype=DEVICE, batch_size=100, run_on_all=True)
 
-        if verbose == 2:
-            scrubbed_circuit.print()
-            if tokenizer is not None:
-                pprint(tokenizer.batch_decode(inps))
-                binps = inps.clone()
-                binps[get_induction_candidate_masks(inps, good_induction_candidates)[0]] = inps[0][0]
-                pprint(tokenizer.batch_decode(binps))
+    exp = Experiment(circuit, ds, correspondence, num_examples=samples, random_seed=seed)
+    scrubbed_circuit = exp.scrub()
+    inps = get_inputs_from_model(scrubbed_circuit.circuit)
+    res = scrubbed_circuit.evaluate(eval_settings)
+    if verbose == 2:
+        scrubbed_circuit.print()
+        if tokenizer is not None:
+            pprint(tokenizer.batch_decode(inps))
+            binps = inps.clone()
+            binps[get_induction_candidate_masks(inps, good_induction_candidates)[0]] = inps[0][0]
+            pprint(tokenizer.batch_decode(binps))
 
-        all_inps.append(inps)
-        all_res.append(res)
-
-    if verbose:
-        print("Concatting inps and res")
-    inps = torch.concat(all_inps, dim=0)
-    res = torch.concat(all_res, dim=0)
     if verbose:
         print("Building induction candidates masks")
     ind_candidates_mask, ind_candidates_later_occur_mask = get_induction_candidate_masks(
         inps[:, :-1], good_induction_candidates
     )
+
+    if save_name:
+        with open(f"data/{save_name}.pkl", "wb") as f:
+            pickle.dump((res, ind_candidates_mask, ind_candidates_later_occur_mask), f)
+        with open(f"data/inps_{save_name}.pkl", "wb") as f:
+            pickle.dump(inps, f)
     return res, ind_candidates_mask, ind_candidates_later_occur_mask, scrubbed_circuit
 
 
@@ -218,11 +211,12 @@ def get_inputs_from_model(model: rc.Circuit):
 
 
 def run_experiment(
-    exps, exp_name: str, model: rc.Circuit, toks, candidates, tokenizer, runs: int = 1, verbose: int = 0
+    exps, exp_name: str, model: rc.Circuit, toks, candidates, tokenizer, samples=10000, save_results=False, verbose=0
 ):
     mean_overall_losses = defaultdict(lambda: torch.zeros(2))
+    save_name = f"{exp_name}" if save_results else ""
     res, ind_candidates_mask, ind_candidates_later_occur_mask, scrubbed_circuit = run_hypothesis(
-        model, toks, exps[exp_name][0], candidates, tokenizer=tokenizer, verbose=verbose, seed=42, runs=runs
+        model, toks, exps[exp_name][0], candidates, samples=samples, tokenizer=tokenizer, verbose=verbose, seed=42, save_name=save_name
     )
     print(exp_name.upper())
     print("OVERALL")
@@ -236,13 +230,3 @@ def run_experiment(
     print("LATER CANDIDATES")
     lc_res = res[ind_candidates_later_occur_mask]
     print(f"{lc_res.mean().item():>10.3f}{lc_res.var().item():>10.3f}{lc_res.shape[0]:>10}")
-
-    # import plotly.express as px
-    # import pandas as pd
-    # import numpy as np
-
-    # x0 = lc_res.cpu().numpy()
-    # x1 = res.flatten().cpu().numpy()
-    # df = pd.DataFrame(dict(series=np.concatenate((["a"] * len(x0), ["b"] * len(x1))), data=np.concatenate((x0, x1))))
-    # fig = px.histogram(df, x="data", color="series", barmode="overlay")
-    # fig.write_image("test.png")
