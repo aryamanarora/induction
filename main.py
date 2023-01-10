@@ -203,13 +203,13 @@ def run_hypothesis(
         if tokenizer is not None:
             pprint(tokenizer.batch_decode(inps))
             binps = inps.clone()
-            binps[get_induction_candidate_masks(inps, good_induction_candidates, inp_ixes)[0]] = inps[0][0]
+            binps[get_induction_candidate_masks(inps[:, :-2], good_induction_candidates, inp_ixes)[0]] = inps[0][0]
             pprint(tokenizer.batch_decode(binps))
 
     if verbose:
         print("Building induction candidates masks")
     ind_candidates_mask, ind_candidates_later_occur_mask = get_induction_candidate_masks(
-        inps[:, :-1], good_induction_candidates, inp_ixes
+        inps[:, :-2], good_induction_candidates, inp_ixes
     )
 
     if save_name:
