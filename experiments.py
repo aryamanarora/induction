@@ -3,259 +3,75 @@ from main import *
 import argparse
 from typing import Optional
 
+
+def make_corr(children: list[rc.IterativeMatcher] = [], options: Optional[dict[str, str]] = None):
+    corr = Correspondence()
+    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
+    corr.add(i_root, corr_root_matcher)
+    for i, child in enumerate(children):
+        tmp = i_root.make_descendant(UncondSampler(), name=f"{i}")
+        corr.add(tmp, child)
+    return (corr, options)
+
+
 # EXPERIMENTS
 def make_experiments() -> dict[str, tuple[Correspondence, dict[str, Optional[str]]]]:
     res = {}
 
     # UNSCRUBBED
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    corr.add(i_root, corr_root_matcher)
-    res["unscrubbed"] = (corr, None)
+    res["unscrubbed"] = make_corr()
 
     # BASELINE
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    a1_ind = i_root.make_descendant(UncondSampler(), name="a1.ind")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(a1_ind, rc.IterativeMatcher("a1.ind"))
-    res["baseline"] = (corr, None)
-
-    # BASELINE
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    a1_ind = i_root.make_descendant(UncondSampler(), name="a1.ind")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(a1_ind, rc.IterativeMatcher("a1.not_ind"))
-    res["not-baseline"] = (corr, None)
+    res["baseline"] = make_corr([rc.IterativeMatcher("a1.ind")])
+    res["not-baseline"] = make_corr([rc.IterativeMatcher("a1.not_ind")])
 
     # EMBEDDING-VALUE
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    v = i_root.make_descendant(UncondSampler(), name="a1.ind.v_input")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        v,
-        rc.IterativeMatcher("a1.ind")
-        .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        .children_matcher({3})
-        .chain("b0.a"),
+    v_matcher = (
+        rc.IterativeMatcher("a1.ind").chain(rc.restrict("a.head.on_inp", term_if_matches=True)).children_matcher({3})
     )
-    res["ev"] = (corr, None)
+    ev = v_matcher.chain("b0.a")
 
-    # NOT EMBEDDING-VALUE
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    v = i_root.make_descendant(UncondSampler(), name="a1.ind.v_input")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        v,
-        rc.IterativeMatcher("a1.ind")
-        .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        .children_matcher({3})
-        .chain(rc.restrict("idxed_embeds", end_depth=3)),
-    )
-    res["not-ev"] = (corr, None)
-
-    # VALUE
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    v = i_root.make_descendant(UncondSampler(), name="a1.ind.v")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        v, rc.IterativeMatcher("a1.ind").chain(rc.restrict("a.head.on_inp", term_if_matches=True)).children_matcher({3})
-    )
-    res["v"] = (corr, None)
+    res["v"] = make_corr([v_matcher])
+    res["ev"] = make_corr([ev])
+    res["not-ev"] = make_corr([v_matcher.chain(rc.restrict("idxed_embeds", end_depth=3))])
 
     # EMBEDDING-QUERY
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    q = i_root.make_descendant(UncondSampler(), name="a1.ind.q_input")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        q,
-        rc.IterativeMatcher("a1.ind")
-        .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        .children_matcher({1})
-        .chain("b0.a"),
+    q_matcher = (
+        rc.IterativeMatcher("a1.ind").chain(rc.restrict("a.head.on_inp", term_if_matches=True)).children_matcher({1})
     )
-    res["eq"] = (corr, None)
+    eq = q_matcher.chain("b0.a")
 
-    # NOT EMBEDDING-QUERY
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    q = i_root.make_descendant(UncondSampler(), name="a1.ind.q_input")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        q,
-        rc.IterativeMatcher("a1.ind")
-        .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        .children_matcher({1})
-        .chain("b0")
-        .chain(rc.restrict("idxed_embeds", end_depth=2)),
-    )
-    res["not-eq"] = (corr, None)
-
-    # QUERY
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    q = i_root.make_descendant(UncondSampler(), name="a1.ind.q")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        q, rc.IterativeMatcher("a1.ind").chain(rc.restrict("a.head.on_inp", term_if_matches=True)).children_matcher({1})
-    )
-    res["q"] = (corr, None)
+    res["q"] = make_corr([q_matcher])
+    res["eq"] = make_corr([eq])
+    res["not-eq"] = make_corr([q_matcher.chain(rc.restrict("idxed_embeds", end_depth=3))])
 
     # EMBEDDING-KEY
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    k = i_root.make_descendant(UncondSampler(), name="a1.ind.k_input")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        k,
-        rc.IterativeMatcher("a1.ind")
-        .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        .children_matcher({2})
-        .chain("b0.a"),
+    k_matcher = (
+        rc.IterativeMatcher("a1.ind").chain(rc.restrict("a.head.on_inp", term_if_matches=True)).children_matcher({2})
     )
-    res["ek"] = (corr, None)
 
-    # NOT EMBEDDING-KEY
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    k = i_root.make_descendant(UncondSampler(), name="a1.ind.k_input")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        k,
-        rc.IterativeMatcher("a1.ind")
-        .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        .children_matcher({2})
-        .chain("b0")
-        .chain(rc.restrict("idxed_embeds", end_depth=2)),
-    )
-    res["not-ek"] = (corr, None)
+    res["k"] = make_corr([k_matcher])
+    res["ek"] = make_corr([k_matcher.chain("b0.a")])
+    res["not-ek"] = make_corr([k_matcher.chain(rc.restrict("idxed_embeds", end_depth=3))])
 
-    # KEY
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    k = i_root.make_descendant(UncondSampler(), name="a1.ind.k")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        k, rc.IterativeMatcher("a1.ind").chain(rc.restrict("a.head.on_inp", term_if_matches=True)).children_matcher({2})
+    # PREVIOUS-TOKEN-HEAD KEY
+    pth_k = k_matcher.chain(rc.restrict("idxed_embeds", term_early_at="b0.a") | rc.Regex(r"\.*not_prev\.*"))
+    res["pth-k"] = make_corr([pth_k])
+    res["not-pth-k"] = make_corr(
+        [k_matcher.chain(rc.restrict("idxed_embeds", term_early_at="b0.a") | rc.Regex(r"\.*yes_prev\.*"))]
     )
-    res["k"] = (corr, None)
-
-    # PTH-KEY
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    k = i_root.make_descendant(UncondSampler(), name="a1.ind.k_input")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        k,
-        rc.IterativeMatcher("a1.ind")
-        .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        .children_matcher({2})
-        .chain(
-            rc.restrict("idxed_embeds", term_early_at="b0.a")  # direct embeds not going through a0
-            | rc.Regex(r"\.*not_prev\.*")  # not-previous-token heads
-        ),
+    res["pth-k-fine"] = make_corr([k_matcher.chain(rc.Regex(r"\.*not_prev\.*"))])
+    res["not-pth-k-emb"] = make_corr(
+        [k_matcher.chain(rc.restrict("idxed_embeds", term_early_at="b0.a") | rc.Regex(r"\.*yes_prev\.*"))]
     )
-    res["pth-k"] = (corr, None)
-
-    # PTH-KEY (FINE)
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    k = i_root.make_descendant(UncondSampler(), name="a1.ind.k_input")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        k,
-        rc.IterativeMatcher("a1.ind")
-        .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        .children_matcher({2})
-        .chain(rc.Regex(r"\.*not_prev\.*")),  # not-previous-token heads
-    )
-    res["pth-k-fine"] = (corr, None)
-
-    # NOT PTH-KEY
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    k = i_root.make_descendant(UncondSampler(), name="a1.ind.k_input")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        k,
-        rc.IterativeMatcher("a1.ind")
-        .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        .children_matcher({2})
-        .chain(rc.Regex(r"\.*yes_prev\.*")),  # previous-token heads
-    )
-    res["not-pth-k"] = (corr, None)
-
-    # NOT PTH-KEY + EMBED
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    k = i_root.make_descendant(UncondSampler(), name="a1.ind.k_input")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        k,
-        rc.IterativeMatcher("a1.ind")
-        .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        .children_matcher({2})
-        .chain(
-            rc.restrict("idxed_embeds", term_early_at="b0.a")  # direct embeds not going through a0
-            | rc.Regex(r"\.*yes_prev\.*")  # previous-token heads
-        ),
-    )
-    res["not-pth-k-emb"] = (corr, None)
 
     # PTH-QUERY
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    k = i_root.make_descendant(UncondSampler(), name="a1.ind.k_input")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        k,
-        rc.IterativeMatcher("a1.ind")
-        .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        .children_matcher({1})
-        .chain(
-            rc.restrict("idxed_embeds", term_early_at="b0.a")  # direct embeds not going through a0
-            | rc.Regex(r"\.*not_prev\.*")  # not-previous-token heads
-        ),
+    res["pth-q"] = make_corr(
+        [q_matcher.chain(rc.restrict("idxed_embeds", term_early_at="b0.a") | rc.Regex(r"\.*not_prev\.*"))]
     )
-    res["pth-q"] = (corr, None)
 
     # ALL (3 og scrubbing)
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    v = i_root.make_descendant(UncondSampler(), name="a1.ind.v_input")
-    q = i_root.make_descendant(UncondSampler(), name="a1.ind.q_input")
-    k = i_root.make_descendant(UncondSampler(), name="a1.ind.k_input")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        v,
-        rc.IterativeMatcher("a1.ind")
-        .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        .children_matcher({3})
-        .chain("b0.a"),
-    )
-    corr.add(
-        q,
-        rc.IterativeMatcher("a1.ind")
-        .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        .children_matcher({1})
-        .chain("b0.a"),
-    )
-    corr.add(
-        k,
-        rc.IterativeMatcher("a1.ind")
-        .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        .children_matcher({2})
-        .chain(
-            rc.restrict("idxed_embeds", term_early_at="b0.a")  # direct embeds not going through a0
-            | rc.Regex(r"\.*not_prev\.*")  # not-previous-token heads
-        ),
-    )
-    res["all"] = (corr, None)
+    res["all"] = make_corr([ev, eq, pth_k])
 
     return res
 
@@ -263,129 +79,56 @@ def make_experiments() -> dict[str, tuple[Correspondence, dict[str, Optional[str
 def a0_heads_to_v() -> dict[str, tuple[Correspondence, dict[str, Optional[str]]]]:
     """Check performance when scrubbing each head in layer 0 as input to a1_ind.k"""
     exps = {}
+    v_matcher = (
+        rc.IterativeMatcher("a1.ind").chain(rc.restrict("a.head.on_inp", term_if_matches=True)).children_matcher({3})
+    )
+
+    def make_corr_v(args: list[rc.IterativeMatcher]):
+        """Make corr but split heads individually"""
+        return make_corr(args, options={"split_heads": "b0-all"})
+
+    def match(head: int):
+        return rc.IterativeMatcher(f"b0.a.head{head}")
+
     for i in range(8):
-        corr = Correspondence()
-        i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-        v = i_root.make_descendant(UncondSampler(), name="a1.ind.v_input")
-        corr.add(i_root, corr_root_matcher)
-        corr.add(
-            v,
-            rc.IterativeMatcher("a1.ind")
-            .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-            .children_matcher({3})
-            .chain(rc.restrict("idxed_embeds", term_early_at="b0.a") | rc.IterativeMatcher(f"b0.a.head{i}")),
+        exps[f"a0-v-{i}"] = make_corr_v(
+            [v_matcher.chain(rc.restrict("idxed_embeds", term_early_at="b0.a") | rc.IterativeMatcher(f"b0.a.head{i}"))]
         )
-        exps[f"a0-v-{i}"] = (corr, {"split_heads": "b0-all"})
 
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    v = i_root.make_descendant(UncondSampler(), name="a1.ind.v_input")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        v,
-        rc.IterativeMatcher("a1.ind")
-        .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        .children_matcher({3})
-        .chain(
-            rc.restrict("idxed_embeds", term_early_at="b0.a")
-            | rc.IterativeMatcher(f"b0.a.head0")
-            | rc.IterativeMatcher(f"b0.a.head6")
-        ),
+    exps[f"a0-v-0,6"] = make_corr_v(
+        [v_matcher.chain(rc.restrict("idxed_embeds", term_early_at="b0.a") | match(0) | match(6))]
     )
-    exps[f"a0-v-0,6"] = (corr, {"split_heads": "b0-all"})
+    exps[f"a0-v-only0,6"] = make_corr_v([v_matcher.chain(match(0) | match(6))])
 
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    v = i_root.make_descendant(UncondSampler(), name="a1.ind.v_input")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        v,
-        rc.IterativeMatcher("a1.ind")
-        .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        .children_matcher({3})
-        .chain(rc.IterativeMatcher(f"b0.a.head0") | rc.IterativeMatcher(f"b0.a.head6")),
+    exps[f"a0-v-not0,6"] = make_corr_v(
+        [
+            v_matcher.chain(
+                rc.restrict("idxed_embeds", term_early_at="b0.a")
+                | match(1)
+                | match(2)
+                | match(3)
+                | match(4)
+                | match(5)
+                | match(7)
+            )
+        ]
     )
-    exps[f"a0-v-only0,6"] = (corr, {"split_heads": "b0-all"})
 
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    v = i_root.make_descendant(UncondSampler(), name="a1.ind.v_input")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        v,
-        rc.IterativeMatcher("a1.ind")
-        .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        .children_matcher({3})
-        .chain(
-            rc.restrict("idxed_embeds", term_early_at="b0.a")
-            | rc.IterativeMatcher(f"b0.a.head1")
-            | rc.IterativeMatcher(f"b0.a.head2")
-            | rc.IterativeMatcher(f"b0.a.head3")
-            | rc.IterativeMatcher(f"b0.a.head4")
-            | rc.IterativeMatcher(f"b0.a.head5")
-            | rc.IterativeMatcher(f"b0.a.head7")
-        ),
+    exps[f"a0-v-onlynot0,6"] = make_corr_v(
+        [v_matcher.chain(match(1) | match(2) | match(3) | match(4) | match(5) | match(7))]
     )
-    exps[f"a0-v-not0,6"] = (corr, {"split_heads": "b0-all"})
 
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    v = i_root.make_descendant(UncondSampler(), name="a1.ind.v_input")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        v,
-        rc.IterativeMatcher("a1.ind")
-        .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        .children_matcher({3})
-        .chain(
-            rc.IterativeMatcher(f"b0.a.head1")
-            | rc.IterativeMatcher(f"b0.a.head2")
-            | rc.IterativeMatcher(f"b0.a.head3")
-            | rc.IterativeMatcher(f"b0.a.head4")
-            | rc.IterativeMatcher(f"b0.a.head5")
-            | rc.IterativeMatcher(f"b0.a.head7")
-        ),
+    exps[f"a0-v-all-bad-but-2"] = make_corr_v(
+        [
+            v_matcher.chain(
+                rc.restrict("idxed_embeds", term_early_at="b0.a") | match(1) | match(3) | match(4) | match(5) | match(7)
+            )
+        ]
     )
-    exps[f"a0-v-onlynot0,6"] = (corr, {"split_heads": "b0-all"})
 
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    v = i_root.make_descendant(UncondSampler(), name="a1.ind.v_input")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        v,
-        rc.IterativeMatcher("a1.ind")
-        .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        .children_matcher({3})
-        .chain(
-            rc.restrict("idxed_embeds", term_early_at="b0.a")
-            | rc.IterativeMatcher(f"b0.a.head1")
-            | rc.IterativeMatcher(f"b0.a.head3")
-            | rc.IterativeMatcher(f"b0.a.head4")
-            | rc.IterativeMatcher(f"b0.a.head5")
-            | rc.IterativeMatcher(f"b0.a.head7")
-        ),
+    exps[f"a0-v-all-bad-but-12"] = make_corr_v(
+        [v_matcher.chain(rc.restrict("idxed_embeds", term_early_at="b0.a") | match(3) | match(4) | match(5) | match(7))]
     )
-    exps[f"a0-v-all-bad-but-2"] = (corr, {"split_heads": "b0-all"})
-
-    corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
-    v = i_root.make_descendant(UncondSampler(), name="a1.ind.v_input")
-    corr.add(i_root, corr_root_matcher)
-    corr.add(
-        v,
-        rc.IterativeMatcher("a1.ind")
-        .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        .children_matcher({3})
-        .chain(
-            rc.restrict("idxed_embeds", term_early_at="b0.a")
-            | rc.IterativeMatcher(f"b0.a.head3")
-            | rc.IterativeMatcher(f"b0.a.head4")
-            | rc.IterativeMatcher(f"b0.a.head5")
-            | rc.IterativeMatcher(f"b0.a.head7")
-        ),
-    )
-    exps[f"a0-v-all-bad-but-12"] = (corr, {"split_heads": "b0-all"})
 
     return exps
 
