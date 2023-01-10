@@ -112,20 +112,34 @@ def get_induction_candidate_masks(
 
     return res_all, res_later
 
+split_head_configs = {
+    "labelled": {
+        0: [(0, "yes_prev"), (S[1:], "not_prev")],
+        1: [
+            (S[5:7], "ind"),
+            (torch.tensor([0, 1, 2, 3, 4, 7]).to(DEVICE), "not_ind"),
+        ],
+    },
+    "all": {0: [(i, f"head{i}") for i in range(8)], 1: [(i, f"head{i}") for i in range(8)]},
+    "b0-all": {
+        0: [(i, f"head{i}") for i in range(8)],
+        1: [
+            (S[5:7], "ind"),
+            (torch.tensor([0, 1, 2, 3, 4, 7]).to(DEVICE), "not_ind"),
+        ],
+    },
+}
 
 # Split by heads, rename, conform
 @torch.inference_mode()
-def clean_model(expected_loss_old: rc.Circuit):
+def clean_model(expected_loss_old: rc.Circuit, split_heads: str = "labelled"):
+    assert split_heads in list(split_head_configs.keys())
+    split_head_config = split_head_configs[split_heads]
+
     by_head = configure_transformer(
         expected_loss_old.get_unique("t.bind_w"),
         to=To.ATTN_HEAD_MLP_NORM,
-        split_by_head_config={
-            0: [(0, "prev"), (S[1:], "not_prev")],
-            1: [
-                (S[5:7], "ind"),
-                (torch.tensor([0, 1, 2, 3, 4, 7]).to(DEVICE), "not_ind"),
-            ],
-        },
+        split_by_head_config=split_head_config,
         use_pull_up_head_split=True,
         check_valid=True,
     )
@@ -143,7 +157,6 @@ def clean_model(expected_loss_old: rc.Circuit):
         .update("a1.not_ind_sum.norm_call", lambda c: c.cast_module().substitute())
         .update("b1.a.not_ind_sum", lambda c: c.cast_module().substitute())
     )
-    with_a1_ind_inputs.print_html()
     return with_a1_ind_inputs
 
 
@@ -217,4 +230,3 @@ def run_experiment(exps, exp_name: str, model: rc.Circuit, toks, candidates, tok
     print("LATER CANDIDATES")
     lc_res = res[ind_candidates_later_occur_mask]
     print(f"{lc_res.mean():.3f}\t{lc_res.var():.3f}\t{lc_res.shape[0]}")
-# %%
