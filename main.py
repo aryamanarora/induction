@@ -49,6 +49,11 @@ def construct_circuit():
         toks_int_values = rc.cast_circuit(
             toks_int_values, rc.TorchDeviceDtypeOp(device=DEVICE, dtype="int64")
         ).cast_array()
+        toks_indices = torch.arange(toks_int_values.shape[0], device=DEVICE).reshape(-1, 1)
+        toks_int_values = rc.Array(
+            torch.concat([toks_int_values.cast_array().value, toks_indices], dim=1),
+            name="toks_int_var",
+        )
         loaded = {s: rc.cast_circuit(c, rc.TorchDeviceDtypeOp(device=DEVICE)) for (s, c) in loaded.items()}
 
         orig_circuit = loaded["t.bind_w"]
@@ -60,11 +65,11 @@ def construct_circuit():
     orig_circuit, tok_embeds, pos_embeds, tokenizer, extra_args, toks_int_values = load_model_and_data()
 
     # sampling vars
-    toks_int_var = rc.Array(torch.zeros(301, dtype=torch.int64).to(DEVICE), "toks_int_var")
+    toks_int_var = rc.Array(torch.zeros(302, dtype=torch.int64).to(DEVICE), "toks_int_var")
 
     # input/expected
-    input_toks = toks_int_var.index(I[:-1], name="input_toks_int")
-    true_toks = toks_int_var.index(I[1:], name="true_toks_int")
+    input_toks = toks_int_var.index(I[:-2], name="input_toks_int")
+    true_toks = toks_int_var.index(I[1:-1], name="true_toks_int")
 
     # feed input tokens to model (after embedding + causal mask)
     idxed_embeds = rc.GeneralFunction.gen_index(tok_embeds, input_toks, index_dim=0, name="idxed_embeds")
@@ -90,27 +95,36 @@ def construct_circuit():
 
 
 def get_induction_candidate_masks(
-    t: torch.Tensor, good_induction_candidates: torch.Tensor
+    t: torch.Tensor, good_induction_candidates: torch.Tensor, inp_ixes: torch.Tensor
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     t is a 2d Tensor of token indices of size batch_size x seq_len
     good_induction_candidate is a 1d Tensor of 0s and 1s of size vocab_size indicating whether the ith token is a good induction candidate in general
     Return two 2d Tensors of bools indicating whether each token in t is a good induction candidate in that row (in the second tensor, we exclude first occurrences of each token in each row)
     """
-    res_all = torch.zeros_like(t, dtype=torch.bool)
-    res_later = torch.zeros_like(t, dtype=torch.bool)
+    try:
+        with open("data/mask_candidates.pkl", "rb") as f:
+            candidates_mask = pickle.load(f)
+        with open("data/mask_repeat_candidates.pkl", "rb") as f:
+            repeat_candidates_mask = pickle.load(f)
+        return candidates_mask[inp_ixes], repeat_candidates_mask[inp_ixes]
+    except FileNotFoundError:
+        print("Precomputed masks not found. Computing from scratch...")
+
+    candidates_mask = torch.zeros_like(t, dtype=torch.bool)
+    repeat_candidates_mask = torch.zeros_like(t, dtype=torch.bool)
     good_induction_candidates = good_induction_candidates.to(dtype=torch.bool)
     # Sorry, couldn't find anything better than a double-for
     for i, row in tqdm(enumerate(t), total=t.shape[0]):
         seen_toks = set()
         for j, tok in enumerate(row):
             if good_induction_candidates[tok]:
-                res_all[i, j] = True
+                candidates_mask[i, j] = True
                 if tok.item() in seen_toks:
-                    res_later[i, j] = True
+                    repeat_candidates_mask[i, j] = True
                 seen_toks.add(tok.item())
 
-    return res_all, res_later
+    return candidates_mask, repeat_candidates_mask
 
 
 split_head_configs = {
@@ -181,19 +195,21 @@ def run_hypothesis(
     exp = Experiment(circuit, ds, correspondence, num_examples=samples, random_seed=seed)
     scrubbed_circuit = exp.scrub()
     inps = get_inputs_from_model(scrubbed_circuit.circuit)
+    inp_ixes = inps[:, -1]
+    inps = inps[:, :-1]
     res = scrubbed_circuit.evaluate(eval_settings)
     if verbose == 2:
         scrubbed_circuit.print()
         if tokenizer is not None:
             pprint(tokenizer.batch_decode(inps))
             binps = inps.clone()
-            binps[get_induction_candidate_masks(inps, good_induction_candidates)[0]] = inps[0][0]
+            binps[get_induction_candidate_masks(inps[:, :-2], good_induction_candidates, inp_ixes)[0]] = inps[0][0]
             pprint(tokenizer.batch_decode(binps))
 
     if verbose:
         print("Building induction candidates masks")
     ind_candidates_mask, ind_candidates_later_occur_mask = get_induction_candidate_masks(
-        inps[:, :-1], good_induction_candidates
+        inps[:, :-2], good_induction_candidates, inp_ixes
     )
 
     if save_name:
