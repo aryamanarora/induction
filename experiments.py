@@ -2,11 +2,15 @@
 from main import *
 import argparse
 from typing import Optional
+from functools import partial
 
 
-def make_corr(children: list[rc.IterativeMatcher] = [], options: Optional[dict[str, str]] = None):
+def make_corr(
+    children: list[rc.IterativeMatcher] = [], options: Optional[dict[str, str]] = None, sampler=ExactSampler()
+):
+    """Make a correspondence graph using a specific sampler."""
     corr = Correspondence()
-    i_root = InterpNode(ExactSampler(), name="logits", other_inputs_sampler=ExactSampler())
+    i_root = InterpNode(sampler, name="logits", other_inputs_sampler=sampler)
     corr.add(i_root, corr_root_matcher)
     for i, child in enumerate(children):
         tmp = i_root.make_descendant(UncondSampler(), name=f"{i}")
@@ -14,9 +18,9 @@ def make_corr(children: list[rc.IterativeMatcher] = [], options: Optional[dict[s
     return (corr, options)
 
 
-def make_corr_i(args: list[rc.IterativeMatcher]):
-    """Make corr but split heads individually"""
-    return make_corr(args, options={"split_heads": "b0-all"})
+def make_make_corr(sampler):
+    """Make a correspondence maker."""
+    return partial(make_corr, sampler=sampler)
 
 
 def m(head: int):
@@ -24,8 +28,12 @@ def m(head: int):
 
 
 # EXPERIMENTS
-def make_experiments() -> dict[str, tuple[Correspondence, dict[str, Optional[str]]]]:
+def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Optional[str]]]]:
     res = {}
+
+    def make_corr_i(args: list[rc.IterativeMatcher]):
+        """Make corr but split heads individually"""
+        return make_corr(args, options={"split_heads": "b0-all"})
 
     # shortcut matchers for useful parts of the graph
     embeds = rc.restrict("idxed_embeds", term_early_at="b0.a")
@@ -40,6 +48,8 @@ def make_experiments() -> dict[str, tuple[Correspondence, dict[str, Optional[str
     # BASELINE
     res["baseline"] = make_corr([rc.IterativeMatcher("a1.ind")])
     res["not-baseline"] = make_corr([rc.IterativeMatcher("a1.not_ind")])
+    res["1.5"] = make_corr([rc.IterativeMatcher("b1.a.head5")], options={"split_heads": "all"})
+    res["1.6"] = make_corr([rc.IterativeMatcher("b1.a.head6")], options={"split_heads": "all"})
 
     # EMBEDDING-VALUE
     ev = v.chain("b0.a")
@@ -104,6 +114,8 @@ def make_experiments() -> dict[str, tuple[Correspondence, dict[str, Optional[str
     res["a0.7"] = make_corr_i([m(7)])
     res["a0.0"] = make_corr_i([m(0)])
 
+    res["transpose-ind"] = res["unscrubbed"]
+
     return res
 
 
@@ -120,7 +132,7 @@ def run(experiments, exp_name, samples, save, verbose):
             lambda circ: rc.Einsum.from_einsum_string("rqk -> rkq", circ),
         )
 
-    run_experiment(
+    res, c_res, lc_res, inps = run_experiment(
         experiments,
         exp_name,
         with_a1_ind_inputs,
@@ -132,12 +144,12 @@ def run(experiments, exp_name, samples, save, verbose):
         save_results=save,
     )
     torch.cuda.empty_cache()
+    return res, c_res, lc_res, inps, tokenizer
 
 
 # %%
 def main():
-    experiments = make_experiments()
-    experiments["transpose-ind"] = experiments["unscrubbed"]
+    experiments = make_experiments(make_make_corr(ExactSampler()))
 
     # parse arguments
     parser = argparse.ArgumentParser(

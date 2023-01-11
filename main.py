@@ -218,7 +218,7 @@ def run_hypothesis(
             pickle.dump((res, ind_candidates_mask, ind_candidates_later_occur_mask), f)
         with open(f"data/inps_{save_name}.pkl", "wb") as f:
             pickle.dump(inps, f)
-    return res, ind_candidates_mask, ind_candidates_later_occur_mask, scrubbed_circuit
+    return res, ind_candidates_mask, ind_candidates_later_occur_mask, scrubbed_circuit, inps
 
 
 def get_inputs_from_model(model: rc.Circuit):
@@ -231,7 +231,7 @@ def run_experiment(
 ):
     mean_overall_losses = defaultdict(lambda: torch.zeros(2))
     save_name = f"{exp_name}" if save_results else ""
-    res, ind_candidates_mask, ind_candidates_later_occur_mask, scrubbed_circuit = run_hypothesis(
+    res, ind_candidates_mask, ind_candidates_later_occur_mask, scrubbed_circuit, inps = run_hypothesis(
         model,
         toks,
         exps[exp_name][0],
@@ -254,3 +254,15 @@ def run_experiment(
     print("LATER CANDIDATES")
     lc_res = res[ind_candidates_later_occur_mask]
     print(f"{lc_res.mean().item():>10.3f}{lc_res.var().item():>10.3f}{lc_res.shape[0]:>10}")
+
+    return res, c_res, lc_res, inps
+
+
+class FixedSampler(CondSampler):
+    pos: int
+
+    def __init__(self, pos=0):
+        self.pos = pos
+
+    def __call__(self, ref: Dataset, ds: Dataset, rng=None) -> Dataset:
+        return ref[self.pos].sample(len(ref))
