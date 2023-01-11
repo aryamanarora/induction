@@ -17,7 +17,7 @@ from interp.circuit.causal_scrubbing.hypothesis import (
 )
 
 from main import run_experiment
-from model import clean_model, construct_circuit
+from model import construct_circuit
 
 class FixedSampler(CondSampler):
     pos: int
@@ -143,9 +143,8 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
 
 
 def run(experiments, exp_name, samples, save, verbose):
-    loss, good_induction_candidate, tokenizer, toks_int_values = construct_circuit()
     options = experiments[exp_name][1] or {}
-    with_a1_ind_inputs = clean_model(loss, **options)
+    with_a1_ind_inputs, good_induction_candidate, tokenizer, toks_int_values = construct_circuit(**options)
 
     if exp_name in ["transpose-ind"]:
         with_a1_ind_inputs = with_a1_ind_inputs.update(

@@ -10,32 +10,51 @@ from interp.tools.rrfs import RRFS_DIR
 DEVICE = "cuda:0"
 seq_len = 300
 
+split_head_configs = {
+    "labelled": {
+        0: [(0, "yes_prev"), (S[1:], "not_prev")],
+        1: [
+            (S[5:7], "ind"),
+            (torch.tensor([0, 1, 2, 3, 4, 7]).to(DEVICE), "not_ind"),
+        ],
+    },
+    "all": {0: [(i, f"head{i}") for i in range(8)], 1: [(i, f"head{i}") for i in range(8)]},
+    "b0-all": {
+        0: [(i, f"head{i}") for i in range(8)],
+        1: [
+            (S[5:7], "ind"),
+            (torch.tensor([0, 1, 2, 3, 4, 7]).to(DEVICE), "not_ind"),
+        ],
+    },
+}
+
 @torch.inference_mode()
-def construct_circuit():
+def load_model_and_data():
+    model_id = "attention_only_2"
+    (loaded, tokenizer, extra_args) = load_model_id(model_id)
+
+    P = rc.Parser()
+    toks_int_values = P("'toks_int_var' [104091,301] Array 3f36c4ca661798003df14994")
+    toks_int_values = rc.cast_circuit(
+        toks_int_values, rc.TorchDeviceDtypeOp(device=DEVICE, dtype="int64")
+    ).cast_array()
+    toks_indices = torch.arange(toks_int_values.shape[0], device=DEVICE).reshape(-1, 1)
+    toks_int_values = rc.Array(
+        torch.concat([toks_int_values.cast_array().value, toks_indices], dim=1),
+        name="toks_int_var",
+    )
+    loaded = {s: rc.cast_circuit(c, rc.TorchDeviceDtypeOp(device=DEVICE)) for (s, c) in loaded.items()}
+
+    orig_circuit = loaded["t.bind_w"]
+    tok_embeds = loaded["t.w.tok_embeds"]
+    pos_embeds = loaded["t.w.pos_embeds"]
+
+    return orig_circuit, tok_embeds, pos_embeds, tokenizer, extra_args, toks_int_values
+
+
+@torch.inference_mode()
+def construct_circuit(split_heads: str = "labelled"):
     """Load the 2L attn-only model and make circuit that calculates loss on the dataset, with empty inputs"""
-
-    @torch.inference_mode()
-    def load_model_and_data():
-        model_id = "attention_only_2"
-        (loaded, tokenizer, extra_args) = load_model_id(model_id)
-
-        P = rc.Parser()
-        toks_int_values = P("'toks_int_var' [104091,301] Array 3f36c4ca661798003df14994")
-        toks_int_values = rc.cast_circuit(
-            toks_int_values, rc.TorchDeviceDtypeOp(device=DEVICE, dtype="int64")
-        ).cast_array()
-        toks_indices = torch.arange(toks_int_values.shape[0], device=DEVICE).reshape(-1, 1)
-        toks_int_values = rc.Array(
-            torch.concat([toks_int_values.cast_array().value, toks_indices], dim=1),
-            name="toks_int_var",
-        )
-        loaded = {s: rc.cast_circuit(c, rc.TorchDeviceDtypeOp(device=DEVICE)) for (s, c) in loaded.items()}
-
-        orig_circuit = loaded["t.bind_w"]
-        tok_embeds = loaded["t.w.tok_embeds"]
-        pos_embeds = loaded["t.w.pos_embeds"]
-
-        return orig_circuit, tok_embeds, pos_embeds, tokenizer, extra_args, toks_int_values
 
     orig_circuit, tok_embeds, pos_embeds, tokenizer, extra_args, toks_int_values = load_model_and_data()
 
@@ -66,45 +85,23 @@ def construct_circuit():
         device=DEVICE, dtype=torch.float32
     )
 
-    return loss, good_induction_candidate, tokenizer, toks_int_values
-
-
-split_head_configs = {
-    "labelled": {
-        0: [(0, "yes_prev"), (S[1:], "not_prev")],
-        1: [
-            (S[5:7], "ind"),
-            (torch.tensor([0, 1, 2, 3, 4, 7]).to(DEVICE), "not_ind"),
-        ],
-    },
-    "all": {0: [(i, f"head{i}") for i in range(8)], 1: [(i, f"head{i}") for i in range(8)]},
-    "b0-all": {
-        0: [(i, f"head{i}") for i in range(8)],
-        1: [
-            (S[5:7], "ind"),
-            (torch.tensor([0, 1, 2, 3, 4, 7]).to(DEVICE), "not_ind"),
-        ],
-    },
-}
-
-# Split by heads, rename, conform
-@torch.inference_mode()
-def clean_model(expected_loss_old: rc.Circuit, split_heads: str = "labelled"):
+    # split by heads
     assert split_heads in list(split_head_configs.keys())
     split_head_config = split_head_configs[split_heads]
 
     by_head = configure_transformer(
-        expected_loss_old.get_unique("t.bind_w"),
+        loss.get_unique("t.bind_w"),
         to=To.ATTN_HEAD_MLP_NORM,
         split_by_head_config=split_head_config,
         use_pull_up_head_split=True,
         check_valid=True,
     )
 
+    # rename, conform
     by_head = by_head.update(lambda c: ".keep." in c.name, lambda c: c.rename(c.name.replace(".keep.", ".")))
     by_head = rc.conform_all_modules(by_head)
 
-    expected_loss = expected_loss_old.update("t.bind_w", lambda _: by_head)
+    expected_loss = loss.update("t.bind_w", lambda _: by_head)
     expected_loss = rc.conform_all_modules(expected_loss)
 
     with_a1_ind_inputs = (
@@ -114,4 +111,4 @@ def clean_model(expected_loss_old: rc.Circuit, split_heads: str = "labelled"):
         .update("a1.not_ind_sum.norm_call", lambda c: c.cast_module().substitute())
         .update("b1.a.not_ind_sum", lambda c: c.cast_module().substitute())
     )
-    return with_a1_ind_inputs
+    return with_a1_ind_inputs, good_induction_candidate, tokenizer, toks_int_values
