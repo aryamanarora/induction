@@ -197,9 +197,10 @@ def run_hypothesis(
     inps = get_inputs_from_model(scrubbed_circuit.circuit)
     inp_ixes = inps[:, -1]
     inps = inps[:, :-1]
+    if verbose:
+        scrubbed_circuit.print()
     res = scrubbed_circuit.evaluate(eval_settings)
     if verbose == 2:
-        scrubbed_circuit.print()
         if tokenizer is not None:
             pprint(tokenizer.batch_decode(inps))
             binps = inps.clone()
@@ -231,7 +232,15 @@ def run_experiment(
     mean_overall_losses = defaultdict(lambda: torch.zeros(2))
     save_name = f"{exp_name}" if save_results else ""
     res, ind_candidates_mask, ind_candidates_later_occur_mask, scrubbed_circuit = run_hypothesis(
-        model, toks, exps[exp_name][0], candidates, samples=samples, tokenizer=tokenizer, verbose=verbose, seed=42, save_name=save_name
+        model,
+        toks,
+        exps[exp_name][0],
+        candidates,
+        samples=samples,
+        tokenizer=tokenizer,
+        verbose=verbose,
+        seed=42,
+        save_name=save_name,
     )
     print(exp_name.upper())
     print("OVERALL")

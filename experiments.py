@@ -30,9 +30,9 @@ def make_experiments() -> dict[str, tuple[Correspondence, dict[str, Optional[str
     # shortcut matchers for useful parts of the graph
     embeds = rc.restrict("idxed_embeds", term_early_at="b0.a")
     a1_head = rc.IterativeMatcher("a1.ind").chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-    v_matcher = a1_head.children_matcher({3})
-    q_matcher = a1_head.children_matcher({1})
-    k_matcher = a1_head.children_matcher({2})
+    v = a1_head.children_matcher({3})
+    q = a1_head.children_matcher({1})
+    k = a1_head.children_matcher({2})
 
     # UNSCRUBBED
     res["unscrubbed"] = make_corr()
@@ -42,54 +42,60 @@ def make_experiments() -> dict[str, tuple[Correspondence, dict[str, Optional[str
     res["not-baseline"] = make_corr([rc.IterativeMatcher("a1.not_ind")])
 
     # EMBEDDING-VALUE
-    ev = v_matcher.chain("b0.a")
+    ev = v.chain("b0.a")
 
-    res["v"] = make_corr([v_matcher])
+    res["v"] = make_corr([v])
     res["ev"] = make_corr([ev])
-    res["not-ev"] = make_corr([v_matcher.chain(rc.restrict("idxed_embeds", end_depth=3))])
+    res["not-ev"] = make_corr([v.chain(embeds)])
+
+    # scrub each head individually
+    for i in range(8):
+        res[f"a0-v-{i}"] = make_corr_i([v.chain(embeds | m(i))])
+        res[f"a0-v-only-{i}"] = make_corr_i([v.chain(m(i))])
+
+    # scrub subsets of heads
+    res[f"a0-v-0,6"] = make_corr_i([v.chain(embeds | m(0) | m(6))])
+    res[f"a0-v-only0,6"] = make_corr_i([v.chain(m(0) | m(6))])
+    res[f"a0-v-only016"] = make_corr_i([v.chain(m(0) | m(1) | m(6))])
+    res[f"a0-v-not0,6"] = make_corr_i([v.chain(embeds | m(1) | m(2) | m(3) | m(4) | m(5) | m(7))])
+    res[f"a0-v-onlynot0,6"] = make_corr_i([v.chain(m(1) | m(2) | m(3) | m(4) | m(5) | m(7))])
+    res[f"a0-v-all-bad-but-2"] = make_corr_i([v.chain(embeds | m(1) | m(3) | m(4) | m(5) | m(7))])
+    res[f"a0-v-all-bad-but-12"] = make_corr_i([v.chain(embeds | m(3) | m(4) | m(5) | m(7))])
 
     # EMBEDDING-QUERY
-    eq = q_matcher.chain("b0.a")
-    res["q"] = make_corr([q_matcher])
+    eq = q.chain("b0.a")
+    res["q"] = make_corr([q])
     res["eq"] = make_corr([eq])
-    res["not-eq"] = make_corr([q_matcher.chain(rc.restrict("idxed_embeds", end_depth=3))])
+    res["not-eq"] = make_corr([q.chain(embeds)])
+
+    # scrub each head individually
+    for i in range(8):
+        res[f"a0-q-{i}"] = make_corr_i([q.chain(embeds | m(i))])
+        res[f"a0-q-only-{i}"] = make_corr_i([q.chain(m(i))])
+
+    res[f"a0-q-only-56"] = make_corr_i([q.chain(m(5) | m(6))])
 
     # EMBEDDING-KEY
-    res["k"] = make_corr([k_matcher])
-    res["ek"] = make_corr([k_matcher.chain("b0.a")])
-    res["not-ek"] = make_corr([k_matcher.chain(rc.restrict("idxed_embeds", end_depth=3))])
+    res["k"] = make_corr([k])
+    res["ek"] = make_corr([k.chain("b0.a")])
+    res["not-ek"] = make_corr([k.chain(embeds)])
 
     # PREVIOUS-TOKEN-HEAD KEY
-    pth_k = k_matcher.chain(embeds | rc.Regex(r"\.*not_prev\.*"))
+    pth_k = k.chain(embeds | rc.Regex(r"\.*not_prev\.*"))
     res["pth-k"] = make_corr([pth_k])
-    res["not-pth-k"] = make_corr([k_matcher.chain(embeds | rc.Regex(r"\.*yes_prev\.*"))])
-    res["pth-k-fine"] = make_corr([k_matcher.chain(rc.Regex(r"\.*not_prev\.*"))])
-    res["not-pth-k-emb"] = make_corr([k_matcher.chain(embeds | rc.Regex(r"\.*yes_prev\.*"))])
+    res["not-pth-k"] = make_corr([k.chain(embeds | rc.Regex(r"\.*yes_prev\.*"))])
+    res["pth-k-fine"] = make_corr([k.chain(rc.Regex(r"\.*not_prev\.*"))])
+    res["not-pth-k-emb"] = make_corr([k.chain(embeds | rc.Regex(r"\.*yes_prev\.*"))])
 
     # include 0.6 also
-    res["not-pth-k-emb-06"] = make_corr(
-        [k_matcher.chain(embeds | m(0) | m(6))],
-        options={"split_heads": "b0-all"},
-    )
-    res["not-pth-k-06"] = make_corr(
-        [k_matcher.chain(m(0) | m(6))],
-        options={"split_heads": "b0-all"},
-    )
-    res["not-pth-k-6"] = make_corr(
-        [k_matcher.chain(m(6))],
-        options={"split_heads": "b0-all"},
-    )
-    res["not-pth-k-7"] = make_corr(
-        [k_matcher.chain(m(7))],
-        options={"split_heads": "b0-all"},
-    )
-    res["not-pth-unimp"] = make_corr(
-        [k_matcher.chain(m(1) | m(2) | m(3) | m(4) | m(5) | m(7))],
-        options={"split_heads": "b0-all"},
-    )
+    res["not-pth-k-emb-06"] = make_corr_i([k.chain(embeds | m(0) | m(6))])
+    res["not-pth-k-06"] = make_corr_i([k.chain(m(0) | m(6))])
+    res["not-pth-k-6"] = make_corr_i([k.chain(m(6))])
+    res["not-pth-k-7"] = make_corr_i([k.chain(m(7))])
+    res["not-pth-unimp"] = make_corr_i([k.chain(m(1) | m(2) | m(3) | m(4) | m(5) | m(7))])
 
     # PTH-QUERY
-    res["pth-q"] = make_corr([q_matcher.chain(embeds | rc.Regex(r"\.*not_prev\.*"))])
+    res["pth-q"] = make_corr([q.chain(embeds | rc.Regex(r"\.*not_prev\.*"))])
 
     # ALL (3 og scrubbing)
     res["all"] = make_corr([ev, eq, pth_k])
@@ -98,22 +104,37 @@ def make_experiments() -> dict[str, tuple[Correspondence, dict[str, Optional[str
     res["a0.7"] = make_corr_i([m(7)])
     res["a0.0"] = make_corr_i([m(0)])
 
-    # scrub each head individually
-    for i in range(8):
-        res[f"a0-v-{i}"] = make_corr_i([v_matcher.chain(embeds | m(i))])
-
-    # scrub subsets of heads
-    res[f"a0-v-0,6"] = make_corr_i([v_matcher.chain(embeds | m(0) | m(6))])
-    res[f"a0-v-only0,6"] = make_corr_i([v_matcher.chain(m(0) | m(6))])
-    res[f"a0-v-only016"] = make_corr_i([v_matcher.chain(m(0) | m(1) | m(6))])
-    res[f"a0-v-not0,6"] = make_corr_i([v_matcher.chain(embeds | m(1) | m(2) | m(3) | m(4) | m(5) | m(7))])
-    res[f"a0-v-onlynot0,6"] = make_corr_i([v_matcher.chain(m(1) | m(2) | m(3) | m(4) | m(5) | m(7))])
-    res[f"a0-v-all-bad-but-2"] = make_corr_i([v_matcher.chain(embeds | m(1) | m(3) | m(4) | m(5) | m(7))])
-    res[f"a0-v-all-bad-but-12"] = make_corr_i([v_matcher.chain(embeds | m(3) | m(4) | m(5) | m(7))])
-
     return res
 
 
+def run(experiments, exp_name, samples, save, verbose):
+    loss, good_induction_candidate, tokenizer, toks_int_values = construct_circuit()
+    options = experiments[exp_name][1] or {}
+    with_a1_ind_inputs = clean_model(loss, **options)
+
+    if exp_name in ["transpose-ind"]:
+        with_a1_ind_inputs = with_a1_ind_inputs.update(
+            rc.IterativeMatcher("a1.ind")
+            .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
+            .chain(rc.restrict("a.attn_scores_raw", end_depth=6)),
+            lambda circ: rc.Einsum.from_einsum_string("rqk -> rkq", circ),
+        )
+
+    run_experiment(
+        experiments,
+        exp_name,
+        with_a1_ind_inputs,
+        toks_int_values,
+        good_induction_candidate,
+        tokenizer,
+        verbose=verbose,
+        samples=samples,
+        save_results=save,
+    )
+    torch.cuda.empty_cache()
+
+
+# %%
 def main():
     experiments = make_experiments()
     experiments["transpose-ind"] = experiments["unscrubbed"]
@@ -131,30 +152,7 @@ def main():
     args = parser.parse_args()
     print(args)
 
-    loss, good_induction_candidate, tokenizer, toks_int_values = construct_circuit()
-    options = experiments[args.exp_name][1] or {}
-    with_a1_ind_inputs = clean_model(loss, **options)
-
-    if args.exp_name in ["transpose-ind"]:
-        with_a1_ind_inputs = with_a1_ind_inputs.update(
-            rc.IterativeMatcher("a1.ind")
-            .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-            .chain(rc.restrict("a.attn_scores_raw", end_depth=6)),
-            lambda circ: rc.Einsum.from_einsum_string("rqk -> rkq", circ),
-        )
-
-    run_experiment(
-        experiments,
-        args.exp_name,
-        with_a1_ind_inputs,
-        toks_int_values,
-        good_induction_candidate,
-        tokenizer,
-        verbose=args.verbose,
-        samples=args.samples,
-        save_results=args.save,
-    )
-    torch.cuda.empty_cache()
+    run(experiments, args.exp_name, args.samples, args.save, args.verbose)
 
 
 if __name__ == "__main__":
