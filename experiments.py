@@ -48,8 +48,8 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
     # BASELINE
     res["baseline"] = make_corr([rc.IterativeMatcher("a1.ind")])
     res["not-baseline"] = make_corr([rc.IterativeMatcher("a1.not_ind")])
-    res["1.5"] = make_corr([rc.IterativeMatcher("b1.a.head5")], options={"split_heads": "all"})
-    res["1.6"] = make_corr([rc.IterativeMatcher("b1.a.head6")], options={"split_heads": "all"})
+    for i in range(8):
+        res[f"1.{i}"] = make_corr([rc.IterativeMatcher(f"b1.a.head{i}")], options={"split_heads": "all"})
 
     # EMBEDDING-VALUE
     ev = v.chain("b0.a")
@@ -114,8 +114,6 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
     res["a0.7"] = make_corr_i([m(7)])
     res["a0.0"] = make_corr_i([m(0)])
 
-    res["transpose-ind"] = res["unscrubbed"]
-
     return res
 
 
@@ -123,14 +121,6 @@ def run(experiments, exp_name, samples, save, verbose):
     loss, good_induction_candidate, tokenizer, toks_int_values = construct_circuit()
     options = experiments[exp_name][1] or {}
     with_a1_ind_inputs = clean_model(loss, **options)
-
-    if exp_name in ["transpose-ind"]:
-        with_a1_ind_inputs = with_a1_ind_inputs.update(
-            rc.IterativeMatcher("a1.ind")
-            .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-            .chain(rc.restrict("a.attn_scores_raw", end_depth=6)),
-            lambda circ: rc.Einsum.from_einsum_string("rqk -> rkq", circ),
-        )
 
     res, c_res, lc_res, inps = run_experiment(
         experiments,
