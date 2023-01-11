@@ -1,9 +1,32 @@
 # %%
-from main import *
 import argparse
 from typing import Optional
 from functools import partial
 
+import torch
+
+import rust_circuit as rc
+from interp.circuit.causal_scrubbing.dataset import Dataset
+from interp.circuit.causal_scrubbing.hypothesis import (
+    CondSampler,
+    Correspondence,
+    ExactSampler,
+    InterpNode,
+    UncondSampler,
+    corr_root_matcher,
+)
+
+from main import run_experiment
+from model import clean_model, construct_circuit
+
+class FixedSampler(CondSampler):
+    pos: int
+
+    def __init__(self, pos=0):
+        self.pos = pos
+
+    def __call__(self, ref: Dataset, ds: Dataset, rng=None) -> Dataset:
+        return ref[self.pos].sample(len(ref))
 
 def make_corr(
     children: list[rc.IterativeMatcher] = [], options: Optional[dict[str, str]] = None, sampler=ExactSampler()
