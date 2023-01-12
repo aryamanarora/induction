@@ -101,4 +101,5 @@ def run_experiment(
     lc_res = res[ind_candidates_later_occur_mask]
     print(f"{lc_res.mean().item():>10.3f}{lc_res.var().item():>10.3f}{lc_res.shape[0]:>10}")
 
-    return res, c_res, lc_res, inps
+    return res, c_res, lc_res, scrubbed_circuit, inps
+    
