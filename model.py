@@ -113,6 +113,8 @@ def construct_circuit(split_heads: str = "labelled", split_pth_ov_by_pt_or_not: 
     )
 
     if split_pth_ov_by_pt_or_not:
+        # Unsure about this code. Might need better substitutions at the end?
+
         prev_mask_sym = rc.Symbol.new_with_random_uuid((seq_len, seq_len), "a.prev_tok_mask")
         not_prev_mask_sym = rc.Symbol.new_with_random_uuid((seq_len, seq_len), "a.not_prev_tok_mask")
         with_a1_ind_inputs = (
