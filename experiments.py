@@ -140,7 +140,7 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
     return res
 
 
-def run(experiments, exp_name, samples, save, verbose):
+def run(experiments, exp_name, samples, save_name, verbose):
     options = experiments[exp_name][1] or {}
     with_a1_ind_inputs, good_induction_candidate, tokenizer, toks_int_values = construct_circuit(**options)
 
@@ -153,7 +153,7 @@ def run(experiments, exp_name, samples, save, verbose):
         tokenizer,
         verbose=verbose,
         samples=samples,
-        save_results=save,
+        save_name=save_name,
     )
     torch.cuda.empty_cache()
     return res, c_res, lc_res, inps, tokenizer
@@ -173,10 +173,20 @@ def main():
     parser.add_argument("--samples", action="store", dest="samples", type=int, default=10000)
     parser.add_argument("--verbose", action="store", dest="verbose", type=int, default=0)
     parser.add_argument("--save", action="store_true", dest="save")
+    parser.add_argument("--idx", action="store", dest="idx", type=int, default=None,
+        help="Dataset index for subgraph ablation attribution")
     args = parser.parse_args()
     print(args)
 
-    run(experiments, args.exp_name, args.samples, args.save, args.verbose)
+    save_name = ""
+    if args.save:
+        save_name = args.exp_name
+    if args.idx is not None:
+        experiments = make_experiments(make_make_corr(FixedSampler(args.idx)))
+        if args.save:
+            save_name += "_saa_{args.idx}"
+
+    run(experiments, args.exp_name, args.samples, save_name, args.verbose)
 
 
 if __name__ == "__main__":

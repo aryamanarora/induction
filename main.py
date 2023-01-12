@@ -1,13 +1,20 @@
+import pytz
 import pickle
+import os.path
 from pprint import pprint
-import rust_circuit as rc
+from datetime import datetime
+
 import torch
+
+import rust_circuit as rc
 from interp.circuit.causal_scrubbing.hypothesis import (Correspondence)
 from interp.circuit.causal_scrubbing.experiment import Experiment, ExperimentEvalSettings
 from interp.circuit.causal_scrubbing.dataset import Dataset
 
 MAIN = __name__ == "__main__"
 DEVICE = "cuda:0"
+RESULTS_PATH = "results"
+DATA_PATH = "data"
 
 
 def get_induction_candidate_masks(
@@ -17,9 +24,9 @@ def get_induction_candidate_masks(
     inp_ixes is a 1d Tensor of ints representing the dataset indices we are interested in.
     Return two 2d Tensors of bools indicating, for each dataset row specified in inp_ixes, whether each token in that row is a good induction candidate (in the second tensor, we exclude first occurrences of each token in each row)
     """
-    with open("data/mask_candidates.pkl", "rb") as f:
+    with open(os.path.join(DATA_PATH, "mask_candidates.pkl"), "rb") as f:
         candidates_mask = pickle.load(f)
-    with open("data/mask_repeat_candidates.pkl", "rb") as f:
+    with open(os.path.join(DATA_PATH, "mask_repeat_candidates.pkl"), "rb") as f:
         repeat_candidates_mask = pickle.load(f)
     return candidates_mask[inp_ixes], repeat_candidates_mask[inp_ixes]
 
@@ -61,10 +68,14 @@ def run_hypothesis(
     ind_candidates_mask, ind_candidates_later_occur_mask = get_induction_candidate_masks(inp_ixes)
 
     if save_name:
-        with open(f"data/{save_name}.pkl", "wb") as f:
-            pickle.dump((res, ind_candidates_mask, ind_candidates_later_occur_mask), f)
-        with open(f"data/inps_{save_name}.pkl", "wb") as f:
-            pickle.dump(inps, f)
+        meta = {
+            "save_name"       : save_name,
+            "seed"            : seed,
+            "samples"         : samples,
+            "timestamp"       : datetime.now(pytz.timezone("America/Los_Angeles")),
+        }
+        with open(os.path.join(RESULTS_PATH, f"{save_name}.pkl"), "wb") as f:
+            pickle.dump((res, inp_ixes, meta), f)
     return res, ind_candidates_mask, ind_candidates_later_occur_mask, scrubbed_circuit, inps
 
 
@@ -74,9 +85,8 @@ def get_inputs_from_model(model: rc.Circuit):
 
 
 def run_experiment(
-    exps, exp_name: str, model: rc.Circuit, toks, candidates, tokenizer, samples=10000, save_results=False, verbose=0
+    exps, exp_name: str, model: rc.Circuit, toks, candidates, tokenizer, samples=10000, save_name="", verbose=0
 ):
-    save_name = f"{exp_name}" if save_results else ""
     res, ind_candidates_mask, ind_candidates_later_occur_mask, scrubbed_circuit, inps = run_hypothesis(
         model,
         toks,
