@@ -1,0 +1,112 @@
+'t.bind_w' Module
+  't.logits' Einsum sh,vh->sv
+    'final.call' Module
+      'final.norm' Module
+        'ln' Add
+          'ln.w.bias' [0s] Symbol 621c7792-0177-45ab-87c5-7ff1c3bec487
+          'ln.y_scaled' Einsum h,h->h
+            'ln.y' Einsum h,->h
+              'ln.mean_subbed' Add
+                'ln.input' [0s] Symbol 981b4d2a-711b-4a9d-a11c-d859c311e80c
+                'ln.neg_mean' Einsum h,z,->z
+                  'ln.input'
+                  'ln.neg' [1] Scalar -1
+                  'ln.c.recip_hidden_size' GeneralFunction reciprocal
+                    'ln.c.hidden_size' GeneralFunction last_dim_size
+                      'ln.input'
+              'ln.rsqrt' GeneralFunction rsqrt
+                'ln.var_p_eps' Add
+                  'ln.c.eps' [] Scalar 0.00001
+                  'ln.var' Einsum h,h,->
+                    'ln.mean_subbed'
+                    'ln.mean_subbed'
+                    'ln.c.recip_hidden_size'
+            'ln.w.scale' [0s] Symbol 0fa341c3-34b3-4699-847f-08674808b28a
+        'final.norm.input' [1s,0s] Symbol 0851aebd-0d39-4f65-89f9-8a8afaed631a ! 'ln.input'
+        'final.ln.w.bias' [0s] Symbol 10652dc2-e9a8-4f1e-8bad-99d46804c7b3 ! 'ln.w.bias'
+        'final.ln.w.scale' [0s] Symbol 2110aef7-70d5-4f77-a929-044e40c31cbd ! 'ln.w.scale'
+      'b1.call' Module ! 'final.norm.input'
+        'b1' Module
+          'b' Add
+            'b.a' Module
+              'a.norm_call' Module
+                'a' Einsum hsd->sd
+                  'a.heads' Module
+                    'a.head.on_inp' Module
+                      'a.head' Einsum sV,dV->sd
+                        'a.comb_v' Einsum qk,kV->qV
+                          'a.attn_probs' GeneralFunction softmax
+                            'a.attn_scores' Add
+                              'a.attn_scores_raw' Einsum qc,kc,,qk->qk
+                                'a.q' Einsum qd,cd->qc
+                                  'a.q.input' [2s,0s] Symbol 4f80d1a1-86a4-4e44-94f7-909ec7089061
+                                  'a.w.q_h' [7s,0s] Symbol 665efa60-d86c-40d5-92b2-b96d11686a8b
+                                'a.k' Einsum kd,cd->kc
+                                  'a.k.input' [3s,0s] Symbol 664bddee-28ca-47e7-9fb7-9a718de06619
+                                  'a.w.k_h' [7s,0s] Symbol 41177709-446d-4588-b9e5-c2bbf59d53a0
+                                'a.c.div_head_size' GeneralFunction rsqrt
+                                  'a.c.head_size' GeneralFunction last_dim_size
+                                    'a.c.bias_for_head_size' Einsum jk->j
+                                      'a.w.k_h'
+                                'a.mask' [2s,3s] Symbol ccfe5bc9-b402-42dd-a5e1-191e6fb7c268
+                              'a.score_neg_inf_bias' Einsum qk,->qk
+                                'a.not_mask' Module
+                                  'not_mask' Add
+                                    'one' [] Scalar 1
+                                    'not_mask.neg_mask' Einsum ,->
+                                      'not_mask.input' [] Symbol b46f6370-11e1-4535-aabc-94554c234673
+                                      'neg_one' [] Scalar -1
+                                  'a.mask' ! 'not_mask.input'
+                                'a.neg_inf' [] Scalar -10000
+                          'a.v' Einsum kd,Vd->kV
+                            'a.v.input' [3s,0s] Symbol 8fd4c632-7f28-49ee-84cc-3dde997e0693
+                            'a.w.v_h' [8s,0s] Symbol 79b6ebff-f9d0-411a-bcdc-530cc13e1524
+                        'a.w.o_h' [0s,8s] Symbol 11a116cb-2168-4725-a06f-1b61a8ca6797
+                      'a.qk_input' Add ! 'a.q.input'
+                        'a.input' [1s,0s] Symbol f9eabd07-e2ab-4ed4-8b4a-c9c039d61835
+                        'a.pos_input' [1s,0s] Symbol eab8313e-d910-4174-8dbe-c612954eec34
+                      'a.qk_input' ! 'a.k.input'
+                      'a.input' ! 'a.v.input'
+                    'a.w.q' [4s,7s,0s] Symbol cf8f9c58-1875-45b0-8007-66b66b8a405a ! 'a.w.q_h'
+                    'a.w.k' [4s,7s,0s] Symbol c342f1cd-71e6-4848-86b4-1c3ffdd46753 ! 'a.w.k_h'
+                    'a.w.v' [4s,8s,0s] Symbol a90db69c-f4ad-47d6-8b76-faa4b107dacd ! 'a.w.v_h'
+                    'a.w.o' [4s,0s,8s] Symbol 24e0e5cf-8b68-4bf2-b198-17237523b237 ! 'a.w.o_h'
+                'a.norm' Module ! 'a.input'
+                  'ln'
+                  'a.norm.input' [1s,0s] Symbol 6a622698-fd68-4d25-aeee-e8d38e68049e ! 'ln.input'
+                  'a.ln.w.bias' [0s] Symbol 2c737289-2702-404c-a22e-ad37c2652620 ! 'ln.w.bias'
+                  'a.ln.w.scale' [0s] Symbol c564149d-e226-4e3d-8e47-7d6e2ceea99e ! 'ln.w.scale'
+              'b.input' [1s,0s] Symbol 5837c4fd-f5ac-4bff-8456-abf3e95bcf36 ! 'a.norm.input'
+            'b.input'
+          'a1.w.q' [4s,7s,0s] Symbol cd613e30-d8f1-6adf-91b7-584a2265b1f5 ! 'a.w.q'
+          'a1.w.k' [4s,7s,0s] Symbol 1e2feb89-414c-343c-1027-c4d1c386bbc4 ! 'a.w.k'
+          'a1.w.v' [4s,8s,0s] Symbol 78e51061-7311-d8a3-c2ce-6f447ed4d57b ! 'a.w.v'
+          'a1.w.o' [4s,0s,8s] Symbol 35bf992d-c9e9-c616-612e-7696a6cecc1b ! 'a.w.o'
+          'a1.ln.w.bias' [0s] Symbol e4b06ce6-0741-c7a8-7ce4-2c8218072e8c ! 'a.ln.w.bias'
+          'a1.ln.w.scale' [0s] Symbol 9b810e76-6ec9-d286-63ca-828dd5f4b3b2 ! 'a.ln.w.scale'
+        'b0.call' Module ! 'b.input'
+          'b0' Module
+            'b'
+            'a0.w.q' [4s,7s,0s] Symbol e3e70682-c209-4cac-629f-6fbed82c07cd ! 'a.w.q'
+            'a0.w.k' [4s,7s,0s] Symbol f728b4fa-4248-5e3a-0a5d-2f346baa9455 ! 'a.w.k'
+            'a0.w.v' [4s,8s,0s] Symbol eb1167b3-67a9-c378-7c65-c1e582e2e662 ! 'a.w.v'
+            'a0.w.o' [4s,0s,8s] Symbol f7c1bd87-4da5-e709-d471-3d60c8a70639 ! 'a.w.o'
+            'a0.ln.w.bias' [0s] Symbol e443df78-9558-867f-5ba9-1faf7a024204 ! 'a.ln.w.bias'
+            'a0.ln.w.scale' [0s] Symbol 23a7711a-8133-2876-37eb-dcd9e87a1613 ! 'a.ln.w.scale'
+          't.input' [1s,0s] Symbol ece2bb5d-c6d6-4b7a-93a5-32b5ac264888 ! 'b.input'
+    't.w.unembed' [10s,0s] Symbol 85d5a05a-ef9e-4910-a967-3f27951f67cf
+  'a0.ln.w.bias_arr' [256] Array 18624dfa6a41a1feac745e42 ! 'a0.ln.w.bias'
+  'a0.ln.w.scale_arr' [256] Array d7e9db6b9a28376601573d83 ! 'a0.ln.w.scale'
+  'a0.w.q_arr' [8,32,256] Array 57386365a3400ee07baa4c31 ! 'a0.w.q'
+  'a0.w.k_arr' [8,32,256] Array acaffb902f90088f60f64b3b ! 'a0.w.k'
+  'a0.w.v_arr' [8,32,256] Array b108d8b1e4540043f225bc3d ! 'a0.w.v'
+  'a0.w.o_arr' [8,256,32] Array 866df1552de6926577472ffd ! 'a0.w.o'
+  'a1.ln.w.bias_arr' [256] Array a0d978058317b1f9d8d23117 ! 'a1.ln.w.bias'
+  'a1.ln.w.scale_arr' [256] Array 0251eb3e5485c286895e2a6c ! 'a1.ln.w.scale'
+  'a1.w.q_arr' [8,32,256] Array 68d0174c830f083271423667 ! 'a1.w.q'
+  'a1.w.k_arr' [8,32,256] Array 5acdca8288a7ee1ac092cfd3 ! 'a1.w.k'
+  'a1.w.v_arr' [8,32,256] Array 230e81dd8e1d51e430b0f921 ! 'a1.w.v'
+  'a1.w.o_arr' [8,256,32] Array 673ae874f25dd3c65d50033c ! 'a1.w.o'
+  'final.ln.w.bias_arr' [256] Array d306c88b8ac052d538611518 ! 'final.ln.w.bias'
+  'final.ln.w.scale_arr' [256] Array 9e948552f0acfb699353dc3e ! 'final.ln.w.scale'
+  't.w.unembed_arr' [50259,256] Array 0258c9f34dcbf92d6bc407af ! 't.w.unembed'
