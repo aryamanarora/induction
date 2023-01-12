@@ -24,10 +24,10 @@ def main():
     assert args.exp_name in list(experiments.keys())
     assert args.exp2_name in list(experiments.keys())
 
-    res1, c_res1, lc_res1, inps1, tokenizer = run(
+    res1, _, _, _, inps1, tokenizer = run(
         experiments, args.exp_name, args.samples if args.exp_name != "unscrubbed" else idx + 1, False, args.verbose
     )
-    res2, c_res2, lc_res2, inps2, _ = run(
+    res2, _, _, _, _, _ = run(
         experiments, args.exp2_name, args.samples if args.exp2_name != "unscrubbed" else idx + 1, False, args.verbose
     )
 
