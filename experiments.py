@@ -26,7 +26,7 @@ class FixedSampler(CondSampler):
         self.pos = pos
 
     def __call__(self, ref: Dataset, ds: Dataset, rng=None) -> Dataset:
-        return ref[self.pos].sample(len(ref))
+        return ds[self.pos].sample(len(ref))
 
 def make_corr(
     children: list[rc.IterativeMatcher] = [], options: Optional[dict[str, str]] = None, sampler=ExactSampler()
