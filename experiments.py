@@ -116,6 +116,10 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
     # PREVIOUS-TOKEN-HEAD KEY
     pth_k = k.chain(embeds | rc.Regex(r"\.*not_prev\.*"))
     res["pth-k"] = make_corr([pth_k])
+    res["pth-k-full"] = make_corr([pth_k |
+                                   k.chain("a.attn_probs * a.not_prev_tok_mask") |
+                                   k.chain(rc.Regex(r"\.*yes_prev\.*")).chain("a.attn_probs")],
+                                  options={"split_pth_ov_by_pt_or_not": True})
     res["not-pth-k"] = make_corr([k.chain(embeds | rc.Regex(r"\.*yes_prev\.*"))])
     res["pth-k-fine"] = make_corr([k.chain(rc.Regex(r"\.*not_prev\.*"))])
     res["not-pth-k-emb"] = make_corr([k.chain(embeds | rc.Regex(r"\.*yes_prev\.*"))])
@@ -144,7 +148,7 @@ def run(experiments, exp_name, samples, save, verbose):
     options = experiments[exp_name][1] or {}
     with_a1_ind_inputs, good_induction_candidate, tokenizer, toks_int_values = construct_circuit(**options)
 
-    res, c_res, lc_res, inps = run_experiment(
+    res, c_res, lc_res, scrubbed_circuit, inps = run_experiment(
         experiments,
         exp_name,
         with_a1_ind_inputs,
@@ -156,7 +160,7 @@ def run(experiments, exp_name, samples, save, verbose):
         save_results=save,
     )
     torch.cuda.empty_cache()
-    return res, c_res, lc_res, inps, tokenizer
+    return res, c_res, lc_res, scrubbed_circuit, inps, tokenizer
 
 
 # %%
@@ -177,6 +181,7 @@ def main():
     print(args)
 
     run(experiments, args.exp_name, args.samples, args.save, args.verbose)
+
 
 
 if __name__ == "__main__":

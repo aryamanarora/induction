@@ -53,7 +53,7 @@ def load_model_and_data():
 
 
 @torch.inference_mode()
-def construct_circuit(split_heads: str = "labelled"):
+def construct_circuit(split_heads: str = "labelled", split_pth_ov_by_pt_or_not: bool=False):
     """Load the 2L attn-only model and make circuit that calculates loss on the dataset, with empty inputs"""
 
     orig_circuit, tok_embeds, pos_embeds, tokenizer, extra_args, toks_int_values = load_model_and_data()
@@ -111,4 +111,33 @@ def construct_circuit(split_heads: str = "labelled"):
         .update("a1.not_ind_sum.norm_call", lambda c: c.cast_module().substitute())
         .update("b1.a.not_ind_sum", lambda c: c.cast_module().substitute())
     )
+
+    if split_pth_ov_by_pt_or_not:
+        prev_mask_sym = rc.Symbol.new_with_random_uuid((seq_len, seq_len), "a.prev_tok_mask")
+        not_prev_mask_sym = rc.Symbol.new_with_random_uuid((seq_len, seq_len), "a.not_prev_tok_mask")
+        with_a1_ind_inputs = (
+            with_a1_ind_inputs.update(rc.Matcher("a0.yes_prev").chain("a.attn_probs"),
+            lambda c: rc.Add(
+                rc.Einsum.from_einsum_string("ij,ij->ij", c, prev_mask_sym),
+                rc.Einsum.from_einsum_string("ij,ij->ij", c, not_prev_mask_sym),
+                name="a.attn_probs_split_by_prev_masks"
+            ))
+        )
+        prev_mask = rc.Array(
+            ((torch.arange(seq_len)[:, None] - 1) == torch.arange(seq_len)[None, :]).to(tok_embeds.cast_array().value),
+            "a.prev_tok_mask",
+        )
+        not_prev_mask = rc.Array(
+            causal_mask.value - prev_mask.value,
+            "a.not_prev_tok_mask",
+        )
+        with_a1_ind_inputs = rc.module_new_bind(
+            with_a1_ind_inputs, ("a.prev_tok_mask", causal_mask), ("a.not_prev_tok_mask", not_prev_mask), name="t.loss"
+        )
+
+        with_a1_ind_inputs.update(
+            rc.Matcher("a1.ind").chain("b0.a"),
+            lambda c: rc.substitute_all_modules(c)
+        )
+
     return with_a1_ind_inputs, good_induction_candidate, tokenizer, toks_int_values
