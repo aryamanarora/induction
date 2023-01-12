@@ -188,7 +188,7 @@ def main():
     if args.idx is not None:
         experiments = make_experiments(make_make_corr(FixedSampler(args.idx)))
         if args.save:
-            save_name += "_saa_{args.idx}"
+            save_name += f"_saa_{args.idx}"
 
     run(experiments, args.exp_name, args.samples, save_name, args.verbose)
 
