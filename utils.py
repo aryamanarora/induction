@@ -20,11 +20,15 @@ def pickle_tokenizer():
     _, tokenizer, _ = load_model_id("attention_only_2")
     with open(os.path.join(DATA_PATH, "tokenizer.pkl"), 'wb') as f:
         pickle.dump(tokenizer, f)
+    return tokenizer
 
 
 def load_tokenizer():
-    with open(os.path.join(DATA_PATH, "tokenizer.pkl"), 'rb') as f:
-        return pickle.load(f)
+    try:
+        with open(os.path.join(DATA_PATH, "tokenizer.pkl"), 'rb') as f:
+            return pickle.load(f)
+    except FileNotFoundError:
+        return pickle_tokenizer()
 
 
 def pickle_inputs():
@@ -38,23 +42,15 @@ def pickle_inputs():
 
     with open(os.path.join(DATA_PATH, 'full_inps.pkl'), 'wb') as f:
         pickle.dump(toks_int_values, f)
+    return toks_int_values
 
 
 def load_inputs():
-    with open(os.path.join(DATA_PATH, 'full_inps.pkl'), 'rb') as f:
-        return pickle.load(f)[:, :-1]
-
-
-def load_res(res_path):
-    with open(os.path.join(DATA_PATH, f"{res_path}.pkl"), "rb") as f:
-        return pickle.load(f)
-
-
-def load_all(res_path):
-    r, m1, m2 = load_res(res_path)
-    with open(f"data/inps_{res_path}.pkl", 'rb') as f:
-        i = pickle.load(f)
-    return r, m1, m2, i
+    try:
+        with open(os.path.join(DATA_PATH, 'full_inps.pkl'), 'rb') as f:
+            return pickle.load(f)[:, :-1]
+    except FileNotFoundError:
+        return pickle_inputs()
 
 
 def decode_and_highlight(seq_to_decode, highlight_mask, tokenizer):
@@ -76,32 +72,28 @@ def decode_and_highlight(seq_to_decode, highlight_mask, tokenizer):
     return res
 
 
-def compare_losses(exp1, exp2, tokenizer, inps, threshold=0):
-    res_1, ind_candidates_mask_1, ind_candidates_later_occur_mask_1 = load_res(exp1)
-    res_2, ind_candidates_mask_2, ind_candidates_later_occur_mask_2 = load_res(exp2)
-    performance_diff = res_1 - res_2
-    i = 0
-    while True:
-        mask = performance_diff < (-1 * threshold)
-        print(decode_and_highlight(inps[i], ind_candidates_later_occur_mask_1[i], tokenizer))
-        print('\n\n')
-        print(decode_and_highlight(inps[i], mask[i], tokenizer))
-        inp = input()
-        if inp == 'q':
-            break
-        elif "t" in inp:
-            threshold = float(inp.split()[-1])
-        else:
-            i += 1
+def get_common_saa_ixes(exps, ix_filter=None):
+    exp_fns = [glob.glob(f'{RESULTS_PATH}/{exp}_saa_*') for exp in exps]
+    exp_ixes = [
+        {int(fn.split('_')[-1].split('.')[0]) for fn in fns}
+        for fns in exp_fns
+    ]
+    if ix_filter is not None:
+        exp_ixes.append(set(ix_filter))
+
+    return set.intersection(*exp_ixes)
 
 
-def build_hist(exp1, exp2):
-    res_1, ind_candidates_mask_1, ind_candidates_later_occur_mask_1 = load_res(exp1)
-    res_2, ind_candidates_mask_2, ind_candidates_later_occur_mask_2 = load_res(exp2)
-    data = res_1[ind_candidates_later_occur_mask_1] - res_2[ind_candidates_later_occur_mask_1]
-    fig = px.histogram(torch.flatten(data.cpu()), range_y=[0, 3000],
-        range_x=[-10, 3])
-    fig.write_image("hist.jpg")
+def get_diff_mean_per_tok_loss(exp1, exp2, inp_ix):
+    with open(f'{RESULTS_PATH}/{exp1}_saa_{inp_ix}.pkl', 'rb') as f:
+        res1, _, _ = pickle.load(f)
+    with open(f'{RESULTS_PATH}/{exp2}_saa_{inp_ix}.pkl', 'rb') as f:
+        res2, _, _ = pickle.load(f)
+    return torch.cat((
+            torch.zeros((1,1)),
+            (res2.mean(dim=0, keepdim=True) - res1.mean(dim=0, keepdim=True)).cpu()
+    ), dim=1)
+
 
 
 # Copied from remix_utils
@@ -124,43 +116,17 @@ def compare_saa_in_cui(comparisons, ix_filter=None):
     for all example ixes on which we have all the relevant exps data.
     If ix_filter is provided, we use only those ixes, rather than all the common ixes.
     """
-    try:
-        inps = load_inputs()
-    except FileNotFoundError:
-        pickle_inputs()
-        inps = load_inputs()
-
-    try:
-        tokenizer = load_tokenizer()
-    except FileNotFoundError:
-        pickle_tokenizer()
-        tokenizer = load_tokenizer()
-
-    exp11, _ = comparisons[0]
-    exp11_files = glob.glob(f'{RESULTS_PATH}/{exp11}_saa_*')
-    ixes = [int(fn.split('_')[-1].split('.')[0]) for fn in exp11_files]
-    if ix_filter is not None:
-        ix_filter = set(ix_filter)
-        ixes = [ix for ix in ixes if ix in ix_filter]
-
-    common_ixes = []
+    inps = load_inputs()
+    tokenizer = load_tokenizer()
+    all_exps = {exp for exp_pair in comparisons for exp in exp_pair}
+    common_ixes = list(get_common_saa_ixes(all_exps, ix_filter))
     all_loss_diffs = []
-    for ix in ixes:
+    for ix in common_ixes:
         ix_loss_diffs = []
-        try:
-            for exp1, exp2 in comparisons:
-                with open(f'{RESULTS_PATH}/{exp1}_saa_{ix}.pkl', 'rb') as f:
-                    res1, _, _ = pickle.load(f)
-                with open(f'{RESULTS_PATH}/{exp2}_saa_{ix}.pkl', 'rb') as f:
-                    res2, _, _ = pickle.load(f)
-                loss_diff = torch.cat((torch.zeros((1,1)), (res2.mean(dim=0,
-                    keepdim=True) - res1.mean(dim=0, keepdim=True)).cpu()), dim=1)
-                ix_loss_diffs.append(loss_diff)
-            common_ixes.append(ix)
-            all_loss_diffs.append(torch.cat(ix_loss_diffs, dim=0))
-
-        except FileNotFoundError:
-            pass
+        for exp1, exp2 in comparisons:
+            loss_diff = get_diff_mean_per_tok_loss(exp1, exp2, ix)
+            ix_loss_diffs.append(loss_diff)
+        all_loss_diffs.append(torch.cat(ix_loss_diffs, dim=0))
 
     comparison_names = [f"Loss increase from {exp1} to {exp2}" for (exp1, exp2) in comparisons]
 
