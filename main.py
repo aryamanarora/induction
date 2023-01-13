@@ -98,6 +98,7 @@ def run_experiment(
         seed=42,
         save_name=save_name,
     )
+
     print(exp_name.upper())
     print("OVERALL")
     print(f"{res.mean().item():>10.3f}{res.var().item():>10.3f}{res.shape[0] * res.shape[1]:>10}")

@@ -19,6 +19,7 @@ from interp.circuit.causal_scrubbing.hypothesis import (
 from main import run_experiment
 from model import construct_circuit
 
+
 class FixedSampler(CondSampler):
     pos: int
 
@@ -27,6 +28,7 @@ class FixedSampler(CondSampler):
 
     def __call__(self, ref: Dataset, ds: Dataset, rng=None) -> Dataset:
         return ds[self.pos].sample(len(ref))
+
 
 def make_corr(
     children: list[rc.IterativeMatcher] = [], options: Optional[dict[str, str]] = None, sampler=ExactSampler()
@@ -38,7 +40,7 @@ def make_corr(
     for i, child in enumerate(children):
         tmp = i_root.make_descendant(UncondSampler(), name=f"{i}")
         corr.add(tmp, child)
-    return (corr, options)
+    return (corr, options, children)
 
 
 def make_make_corr(sampler):
@@ -71,8 +73,33 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
     # BASELINE
     res["baseline"] = make_corr([rc.IterativeMatcher("a1.ind")])
     res["not-baseline"] = make_corr([rc.IterativeMatcher("a1.not_ind")])
+    res["not-baseline-full"] = make_corr(
+        [rc.IterativeMatcher("a1.not_ind") | rc.IterativeMatcher(rc.restrict("b0", term_early_at="b1.a"))]
+    )
     for i in range(8):
+        res[f"0.{i}"] = make_corr([rc.IterativeMatcher(f"b0.a.head{i}")], options={"split_heads": "all"})
+        res[f"1-0.{i}"] = make_corr(
+            [rc.IterativeMatcher("b1.a").chain(f"b0.a.head{i}")], options={"split_heads": "all"}
+        )
+        res[f"resid-0.{i}"] = make_corr(
+            [rc.IterativeMatcher(rc.restrict(f"b0.a.head{i}", term_early_at="b1.a"))], options={"split_heads": "all"}
+        )
         res[f"1.{i}"] = make_corr([rc.IterativeMatcher(f"b1.a.head{i}")], options={"split_heads": "all"})
+
+    res[f"resid-0"] = make_corr([rc.IterativeMatcher(rc.restrict("b0", term_early_at="b1.a"))])
+    res[f"resid-0-indiv"] = make_corr(
+        [rc.IterativeMatcher(rc.restrict(m(i), term_early_at="b1.a")) for i in range(8)], options={"split_heads": "all"}
+    )
+    res[f"resid-0-prev"] = make_corr(
+        [rc.IterativeMatcher(rc.restrict(m(0) | m(6), term_early_at="b1.a"))], options={"split_heads": "all"}
+    )
+    res[f"resid-0-begin"] = make_corr(
+        [rc.IterativeMatcher(rc.restrict(m(4) | m(7), term_early_at="b1.a"))], options={"split_heads": "all"}
+    )
+    res[f"resid-0-diag"] = make_corr(
+        [rc.IterativeMatcher(rc.restrict(m(1) | m(2) | m(3) | m(5), term_early_at="b1.a"))],
+        options={"split_heads": "all"},
+    )
 
     # EMBEDDING-VALUE
     ev = v.chain("b0.a")
@@ -85,6 +112,10 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
     for i in range(8):
         res[f"a0-v-{i}"] = make_corr_i([v.chain(embeds | m(i))])
         res[f"a0-v-only-{i}"] = make_corr_i([v.chain(m(i))])
+
+    # scrub all heads ind.
+    res[f"a0-v-indep"] = make_corr_i([v.chain(m(i)) for i in range(8)] + [v.chain(embeds)])
+    res[f"a0-v-indep-only"] = make_corr_i([v.chain(m(i)) for i in range(8)])
 
     # scrub subsets of heads
     res[f"a0-v-0,6"] = make_corr_i([v.chain(embeds | m(0) | m(6))])
@@ -106,6 +137,14 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
         res[f"a0-q-{i}"] = make_corr_i([q.chain(embeds | m(i))])
         res[f"a0-q-only-{i}"] = make_corr_i([q.chain(m(i))])
 
+    # scrub all heads ind.
+    res[f"a0-q-indep"] = make_corr_i([q.chain(m(i)) for i in range(8)] + [q.chain(embeds)])
+    res[f"a0-q-indep-only"] = make_corr_i([q.chain(m(i)) for i in range(8)])
+    res[f"a0-q-indep-125"] = make_corr_i([q.chain(m(i)) for i in [2, 5, 1]])
+    res[f"a0-q-indep-1235"] = make_corr_i([q.chain(m(i)) for i in [2, 5, 1, 3]])
+    res[f"a0-q-indep-12356"] = make_corr_i([q.chain(m(i)) for i in [2, 5, 1, 3, 6]])
+
+    # scrub subsets of heads
     res[f"a0-q-only-56"] = make_corr_i([q.chain(m(5) | m(6))])
 
     # EMBEDDING-KEY
@@ -116,10 +155,14 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
     # PREVIOUS-TOKEN-HEAD KEY
     pth_k = k.chain(embeds | rc.Regex(r"\.*not_prev\.*"))
     res["pth-k"] = make_corr([pth_k])
-    res["pth-k-full"] = make_corr([pth_k |
-                                   k.chain("a.attn_probs * a.not_prev_tok_mask") |
-                                   k.chain(rc.Regex(r"\.*yes_prev\.*")).chain("a.attn_probs")],
-                                  options={"split_pth_ov_by_pt_or_not": True})
+    res["pth-k-full"] = make_corr(
+        [
+            pth_k
+            | k.chain("a.attn_probs * a.not_prev_tok_mask")
+            | k.chain("a.attn_probs * a.prev_tok_mask").chain("a.attn_probs")
+        ],
+        options={"split_pth_ov_by_pt_or_not": True},
+    )
     res["not-pth-k"] = make_corr([k.chain(embeds | rc.Regex(r"\.*yes_prev\.*"))])
     res["pth-k-fine"] = make_corr([k.chain(rc.Regex(r"\.*not_prev\.*"))])
     res["not-pth-k-emb"] = make_corr([k.chain(embeds | rc.Regex(r"\.*yes_prev\.*"))])
@@ -137,21 +180,17 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
     # ALL (3 og scrubbing)
     res["all"] = make_corr([ev, eq, pth_k])
 
-    # a0.7
-    res["a0.7"] = make_corr_i([m(7)])
-    res["a0.0"] = make_corr_i([m(0)])
-
     return res
 
 
 def run(experiments, exp_name, samples, save_name, verbose):
     options = experiments[exp_name][1] or {}
-    with_a1_ind_inputs, good_induction_candidate, tokenizer, toks_int_values = construct_circuit(**options)
+    model, good_induction_candidate, tokenizer, toks_int_values = construct_circuit(**options)
 
     res, c_res, lc_res, scrubbed_circuit, inps = run_experiment(
         experiments,
         exp_name,
-        with_a1_ind_inputs,
+        model,
         toks_int_values,
         good_induction_candidate,
         tokenizer,
@@ -177,8 +216,14 @@ def main():
     parser.add_argument("--samples", action="store", dest="samples", type=int, default=10000)
     parser.add_argument("--verbose", action="store", dest="verbose", type=int, default=0)
     parser.add_argument("--save", action="store_true", dest="save")
-    parser.add_argument("--idx", action="store", dest="idx", type=int, default=None,
-        help="Dataset index for subgraph ablation attribution")
+    parser.add_argument(
+        "--idx",
+        action="store",
+        dest="idx",
+        type=int,
+        default=None,
+        help="Dataset index for subgraph ablation attribution",
+    )
     args = parser.parse_args()
     print(args)
 
@@ -191,7 +236,6 @@ def main():
             save_name += f"_saa_{args.idx}"
 
     run(experiments, args.exp_name, args.samples, save_name, args.verbose)
-
 
 
 if __name__ == "__main__":

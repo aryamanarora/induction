@@ -1,3 +1,4 @@
+# %%
 import torch
 
 import rust_circuit as rc
@@ -28,6 +29,7 @@ split_head_configs = {
     },
 }
 
+
 @torch.inference_mode()
 def load_model_and_data():
     model_id = "attention_only_2"
@@ -35,9 +37,7 @@ def load_model_and_data():
 
     P = rc.Parser()
     toks_int_values = P("'toks_int_var' [104091,301] Array 3f36c4ca661798003df14994")
-    toks_int_values = rc.cast_circuit(
-        toks_int_values, rc.TorchDeviceDtypeOp(device=DEVICE, dtype="int64")
-    ).cast_array()
+    toks_int_values = rc.cast_circuit(toks_int_values, rc.TorchDeviceDtypeOp(device=DEVICE, dtype="int64")).cast_array()
     toks_indices = torch.arange(toks_int_values.shape[0], device=DEVICE).reshape(-1, 1)
     toks_int_values = rc.Array(
         torch.concat([toks_int_values.cast_array().value, toks_indices], dim=1),
@@ -53,7 +53,7 @@ def load_model_and_data():
 
 
 @torch.inference_mode()
-def construct_circuit(split_heads: str = "labelled", split_pth_ov_by_pt_or_not: bool=False):
+def construct_circuit(split_heads: str = "labelled", split_pth_ov_by_pt_or_not: bool = False):
     """Load the 2L attn-only model and make circuit that calculates loss on the dataset, with empty inputs"""
 
     orig_circuit, tok_embeds, pos_embeds, tokenizer, extra_args, toks_int_values = load_model_and_data()
@@ -104,7 +104,7 @@ def construct_circuit(split_heads: str = "labelled", split_pth_ov_by_pt_or_not: 
     expected_loss = loss.update("t.bind_w", lambda _: by_head)
     expected_loss = rc.conform_all_modules(expected_loss)
 
-    with_a1_ind_inputs = (
+    model = (
         expected_loss.update("a1.ind_sum.norm_call", lambda c: c.cast_module().substitute())
         .update("b1.a.ind_sum", lambda c: c.cast_module().substitute())
         .update("t.call", lambda c: c.cast_module().substitute())
@@ -113,18 +113,9 @@ def construct_circuit(split_heads: str = "labelled", split_pth_ov_by_pt_or_not: 
     )
 
     if split_pth_ov_by_pt_or_not:
-        # Unsure about this code. Might need better substitutions at the end?
+        k = rc.IterativeMatcher("a1.ind")
 
-        prev_mask_sym = rc.Symbol.new_with_random_uuid((seq_len, seq_len), "a.prev_tok_mask")
-        not_prev_mask_sym = rc.Symbol.new_with_random_uuid((seq_len, seq_len), "a.not_prev_tok_mask")
-        with_a1_ind_inputs = (
-            with_a1_ind_inputs.update(rc.Matcher("a0.yes_prev").chain("a.attn_probs"),
-            lambda c: rc.Add(
-                rc.Einsum.from_einsum_string("ij,ij->ij", c, prev_mask_sym),
-                rc.Einsum.from_einsum_string("ij,ij->ij", c, not_prev_mask_sym),
-                name="a.attn_probs_split_by_prev_masks"
-            ))
-        )
+        # set up prev and not prev masks, will split v between these
         prev_mask = rc.Array(
             ((torch.arange(seq_len)[:, None] - 1) == torch.arange(seq_len)[None, :]).to(tok_embeds.cast_array().value),
             "a.prev_tok_mask",
@@ -133,13 +124,24 @@ def construct_circuit(split_heads: str = "labelled", split_pth_ov_by_pt_or_not: 
             causal_mask.value - prev_mask.value,
             "a.not_prev_tok_mask",
         )
-        with_a1_ind_inputs = rc.module_new_bind(
-            with_a1_ind_inputs, ("a.prev_tok_mask", causal_mask), ("a.not_prev_tok_mask", not_prev_mask), name="t.loss"
+
+        # create new circuit in the comb_v position that splits up the value calculation
+        attn_probs = model.get_unique(k.chain("a0.yes_prev").chain("a.comb_v").chain("a.attn_probs"))
+        v = model.get_unique(k.chain("a0.yes_prev").chain("a.v"))
+        new_comb_v = rc.Add(
+            rc.Einsum.from_einsum_string(
+                "qk,kV,qk->qV", attn_probs, v, prev_mask, name="a.attn_probs * a.prev_tok_mask"
+            ),
+            rc.Einsum.from_einsum_string(
+                "qk,kV,qk->qV", attn_probs, v, not_prev_mask, name="a.attn_probs * a.not_prev_tok_mask'"
+            ),
+            name="a.comb_v",
         )
 
-        with_a1_ind_inputs.update(
-            rc.Matcher("a1.ind").chain("b0.a"),
-            lambda c: rc.substitute_all_modules(c)
-        )
+        model = model.update(k.chain("a0.yes_prev").chain("a.comb_v"), lambda x: new_comb_v)
+        model = model.update(k.chain("a0.yes_prev").chain("a.head.on_inp"), lambda x: x.cast_module().substitute())
 
-    return with_a1_ind_inputs, good_induction_candidate, tokenizer, toks_int_values
+    return model, good_induction_candidate, tokenizer, toks_int_values
+
+
+# %%
