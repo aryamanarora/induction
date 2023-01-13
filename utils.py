@@ -7,24 +7,55 @@ import rust_circuit as rc
 import plotly.express as px
 from colorama import Fore, Back, Style
 from typing import Any, Callable
-from itertools import chain, repeat, islice
 
 from interp import cui
 from interp.ui.very_named_tensor import VeryNamedTensor
+from interp.circuit.interop_rust.module_library import load_model_id
 
 DEVICE='cuda'
 RESULTS_PATH = 'results'
 DATA_PATH = 'data'
 
-def load_res(res_path):
-    with open(f"data/{res_path}.pkl", "rb") as f:
+def pickle_tokenizer():
+    _, tokenizer, _ = load_model_id("attention_only_2")
+    with open(os.path.join(DATA_PATH, "tokenizer.pkl"), 'wb') as f:
+        pickle.dump(tokenizer, f)
+
+
+def load_tokenizer():
+    with open(os.path.join(DATA_PATH, "tokenizer.pkl"), 'rb') as f:
         return pickle.load(f)
+
+
+def pickle_inputs():
+    P = rc.Parser()
+    toks_int_values = P("'toks_int_var' [104091,301] Array 3f36c4ca661798003df14994")
+    toks_int_values = rc.cast_circuit(
+        toks_int_values, rc.TorchDeviceDtypeOp(device=DEVICE, dtype="int64")
+    ).cast_array()
+    toks_indices = torch.arange(toks_int_values.shape[0], device=DEVICE).reshape(-1, 1)
+    toks_int_values = torch.concat([toks_int_values.cast_array().value, toks_indices], dim=1)
+
+    with open(os.path.join(DATA_PATH, 'full_inps.pkl'), 'wb') as f:
+        pickle.dump(toks_int_values, f)
+
+
+def load_inputs():
+    with open(os.path.join(DATA_PATH, 'full_inps.pkl'), 'rb') as f:
+        return pickle.load(f)[:, :-1]
+
+
+def load_res(res_path):
+    with open(os.path.join(DATA_PATH, f"{res_path}.pkl"), "rb") as f:
+        return pickle.load(f)
+
 
 def load_all(res_path):
     r, m1, m2 = load_res(res_path)
     with open(f"data/inps_{res_path}.pkl", 'rb') as f:
         i = pickle.load(f)
     return r, m1, m2, i
+
 
 def decode_and_highlight(seq_to_decode, highlight_mask, tokenizer):
     res = []
@@ -43,6 +74,7 @@ def decode_and_highlight(seq_to_decode, highlight_mask, tokenizer):
     res = res.replace("[[[", Back.RED)
     res = res.replace("]]]", f"{Style.RESET_ALL}")
     return res
+
 
 def compare_losses(exp1, exp2, tokenizer, inps, threshold=0):
     res_1, ind_candidates_mask_1, ind_candidates_later_occur_mask_1 = load_res(exp1)
@@ -86,16 +118,26 @@ def await_without_await(func: Callable[[], Any]):
         pass
 
 
-def compare_saa_in_cui(comparisons, tokenizer):
+def compare_saa_in_cui(comparisons):
     """
     comparisons is an iterable of pairs (exp1, exp2). We compute the diff for each pair,
     for all example ixes on which we have all the relevant exps data.
     """
+    try:
+        inps = load_inputs()
+    except FileNotFoundError:
+        pickle_inputs()
+        inps = load_inputs()
+
+    try:
+        tokenizer = load_tokenizer()
+    except FileNotFoundError:
+        pickle_tokenizer()
+        tokenizer = load_tokenizer()
+
     exp11, _ = comparisons[0]
     exp11_files = glob.glob(f'{RESULTS_PATH}/{exp11}_saa_*')
     ixes = [fn.split('_')[-1].split('.')[0] for fn in exp11_files]
-    with open(os.path.join(DATA_PATH, 'full_inps.pkl'), 'rb') as f:
-        inps = pickle.load(f)[:, :-1]
     common_ixes = []
     all_loss_diffs = []
     for ix in ixes:

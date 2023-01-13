@@ -1,8 +1,6 @@
 # %%
 # This is a demo and explainer on how to use the Subgraph Ablation Attribution
 # CUI visualizations.
-# NOTE: The compare_saa_in_cui function requires that the inputs for the entire
-# dataset be pickled in DATA_PATH/full_inputs.pkl'
 
 import pickle
 import os.path
@@ -38,11 +36,6 @@ comparisons = [
     ("ev", "eq"),
 ]
 
-# We will also need the tokenizer, which hopefully is conveniently pickled.
-
-with open(os.path.join(DATA_PATH, 'tokenizer.pkl'), 'rb') as f:
-    tokenizer = pickle.load(f)
-
 # Now we can open CUI. At the top, you should be able to choose any dataset
 # example for which we have all the relevant experiment pickles (in the case
 # above, this would be only 0. If you have also run the same three commands for
@@ -51,5 +44,5 @@ with open(os.path.join(DATA_PATH, 'tokenizer.pkl'), 'rb') as f:
 # have Comparison (example) set to facet, and Pos(seq) set to axis. The chart
 # type should be Colored Text.
 
-compare_saa_in_cui(comparisons, tokenizer)
+compare_saa_in_cui(comparisons)
 # %%
