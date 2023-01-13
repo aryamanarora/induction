@@ -118,10 +118,11 @@ def await_without_await(func: Callable[[], Any]):
         pass
 
 
-def compare_saa_in_cui(comparisons):
+def compare_saa_in_cui(comparisons, ix_filter=None):
     """
     comparisons is an iterable of pairs (exp1, exp2). We compute the diff for each pair,
     for all example ixes on which we have all the relevant exps data.
+    If ix_filter is provided, we use only those ixes, rather than all the common ixes.
     """
     try:
         inps = load_inputs()
@@ -137,7 +138,11 @@ def compare_saa_in_cui(comparisons):
 
     exp11, _ = comparisons[0]
     exp11_files = glob.glob(f'{RESULTS_PATH}/{exp11}_saa_*')
-    ixes = [fn.split('_')[-1].split('.')[0] for fn in exp11_files]
+    ixes = [int(fn.split('_')[-1].split('.')[0]) for fn in exp11_files]
+    if ix_filter is not None:
+        ix_filter = set(ix_filter)
+        ixes = [ix for ix in ixes if ix in ix_filter]
+
     common_ixes = []
     all_loss_diffs = []
     for ix in ixes:
@@ -151,7 +156,7 @@ def compare_saa_in_cui(comparisons):
                 loss_diff = torch.cat((torch.zeros((1,1)), (res2.mean(dim=0,
                     keepdim=True) - res1.mean(dim=0, keepdim=True)).cpu()), dim=1)
                 ix_loss_diffs.append(loss_diff)
-            common_ixes.append(int(ix))
+            common_ixes.append(ix)
             all_loss_diffs.append(torch.cat(ix_loss_diffs, dim=0))
 
         except FileNotFoundError:
