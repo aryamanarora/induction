@@ -5,12 +5,14 @@ import pickle
 import os.path
 import rust_circuit as rc
 import plotly.express as px
+from tqdm import tqdm
 from colorama import Fore, Back, Style
 from typing import Any, Callable
 
 from interp import cui
 from interp.ui.very_named_tensor import VeryNamedTensor
 from interp.circuit.interop_rust.module_library import load_model_id
+from interp.tools.rrfs import RRFS_DIR
 
 DEVICE='cuda'
 RESULTS_PATH = 'results'
@@ -51,6 +53,35 @@ def load_inputs():
             return pickle.load(f)[:, :-1]
     except FileNotFoundError:
         return pickle_inputs()
+
+
+def load_good_induction_candidates():
+    cache_dir = f"{RRFS_DIR}/ryan/induction_scrub/cached_vals"
+    return torch.load(f"{cache_dir}/induction_candidates_2022-10-15 04:48:29.970735.pt").to(
+        device=DEVICE, dtype=torch.float32
+    )
+
+
+def build_token_filters():
+    inps = load_inputs()[:, :-1]
+    good_induction_candidates = load_good_induction_candidates().to(dtype=torch.bool)
+
+    candidates_mask = torch.zeros_like(inps, dtype=torch.bool)
+    repeats_mask = torch.zeros_like(inps, dtype=torch.bool)
+    for i, row in tqdm(enumerate(inps), total=inps.shape[0]):
+        seen_toks = set()
+        for j, tok in enumerate(row):
+            if good_induction_candidates[tok]:
+                candidates_mask[i, j] = True
+            if tok.item() in seen_toks:
+                repeats_mask[i, j] = True
+            seen_toks.add(tok.item())
+    with open(os.path.join(DATA_PATH, "mask_candidates.pkl"), "wb") as f:
+        pickle.dump(candidates_mask, f)
+    with open(os.path.join(DATA_PATH, "mask_repeats.pkl"), "wb") as f:
+        pickle.dump(repeats_mask, f)
+    with open(os.path.join(DATA_PATH, "mask_repeat_candidates.pkl"), "wb") as f:
+        pickle.dump(repeats_mask and candidates_mask, f)
 
 
 def decode_and_highlight(seq_to_decode, highlight_mask, tokenizer):
