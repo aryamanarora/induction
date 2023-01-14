@@ -53,7 +53,7 @@ def load_model_and_data():
 
 
 @torch.inference_mode()
-def construct_circuit(split_heads: str = "labelled", split_pth_ov_by_pt_or_not: bool = False):
+def construct_circuit(split_heads: str = "labelled", split_pth_ov_by_pt_or_not: bool = False, transpose_head=None):
     """Load the 2L attn-only model and make circuit that calculates loss on the dataset, with empty inputs"""
 
     orig_circuit, tok_embeds, pos_embeds, tokenizer, extra_args, toks_int_values = load_model_and_data()
@@ -111,6 +111,14 @@ def construct_circuit(split_heads: str = "labelled", split_pth_ov_by_pt_or_not: 
         .update("a1.not_ind_sum.norm_call", lambda c: c.cast_module().substitute())
         .update("b1.a.not_ind_sum", lambda c: c.cast_module().substitute())
     )
+
+    if transpose_head:
+        model = model.update(
+            rc.IterativeMatcher(transpose_head)
+            .chain(rc.restrict("a.head.on_inp", term_if_matches=True))
+            .chain(rc.restrict("a.attn_scores_raw", end_depth=6)),
+            lambda circ: rc.Einsum.from_einsum_string("rqk -> rkq" if len(circ.shape) == 3 else "qk -> kq", circ),
+        )
 
     if split_pth_ov_by_pt_or_not:
         k = rc.IterativeMatcher("a1.ind")

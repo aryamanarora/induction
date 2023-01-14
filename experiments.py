@@ -60,6 +60,10 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
         """Make corr but split heads individually"""
         return make_corr(args, options={"split_heads": "b0-all"})
 
+    def make_corr_a(args: list[rc.IterativeMatcher]):
+        """Make corr but split all heads individually"""
+        return make_corr(args, options={"split_heads": "all"})
+
     # shortcut matchers for useful parts of the graph
     embeds = rc.restrict("idxed_embeds", term_early_at="b0.a")
     a1_head = rc.IterativeMatcher("a1.ind").chain(rc.restrict("a.head.on_inp", term_if_matches=True))
@@ -70,6 +74,12 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
     # UNSCRUBBED
     res["unscrubbed"] = make_corr()
 
+    # tranpose
+    res["a1-ind-transpose"] = make_corr(options={"transpose_head": "a1.ind"})
+    for l in range(2):
+        for h in range(8):
+            res[f"{l}{h}-transpose"] = make_corr(options={"split_heads": "all", "transpose_head": f"b{l}.a.head{h}"})
+
     # BASELINE
     res["baseline"] = make_corr([rc.IterativeMatcher("a1.ind")])
     res["not-baseline"] = make_corr([rc.IterativeMatcher("a1.not_ind")])
@@ -77,28 +87,19 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
         [rc.IterativeMatcher("a1.not_ind") | rc.IterativeMatcher(rc.restrict("b0", term_early_at="b1.a"))]
     )
     for i in range(8):
-        res[f"0.{i}"] = make_corr([rc.IterativeMatcher(f"b0.a.head{i}")], options={"split_heads": "all"})
-        res[f"1-0.{i}"] = make_corr(
-            [rc.IterativeMatcher("b1.a").chain(f"b0.a.head{i}")], options={"split_heads": "all"}
-        )
-        res[f"resid-0.{i}"] = make_corr(
-            [rc.IterativeMatcher(rc.restrict(f"b0.a.head{i}", term_early_at="b1.a"))], options={"split_heads": "all"}
-        )
-        res[f"1.{i}"] = make_corr([rc.IterativeMatcher(f"b1.a.head{i}")], options={"split_heads": "all"})
+        res[f"0.{i}"] = make_corr_a([rc.IterativeMatcher(f"b0.a.head{i}")])
+        res[f"1-0.{i}"] = make_corr_a([rc.IterativeMatcher("b1.a").chain(f"b0.a.head{i}")])
+        res[f"resid-0.{i}"] = make_corr_a([rc.IterativeMatcher(rc.restrict(f"b0.a.head{i}", term_early_at="b1.a"))])
+        res[f"1.{i}"] = make_corr_a([rc.IterativeMatcher(f"b1.a.head{i}")])
 
-    res[f"resid-0"] = make_corr([rc.IterativeMatcher(rc.restrict("b0", term_early_at="b1.a"))])
-    res[f"resid-0-indiv"] = make_corr(
-        [rc.IterativeMatcher(rc.restrict(m(i), term_early_at="b1.a")) for i in range(8)], options={"split_heads": "all"}
+    res[f"resid-0"] = make_corr_a([rc.IterativeMatcher(rc.restrict("b0", term_early_at="b1.a"))])
+    res[f"resid-0-indiv"] = make_corr_a(
+        [rc.IterativeMatcher(rc.restrict(m(i), term_early_at="b1.a")) for i in range(8)]
     )
-    res[f"resid-0-prev"] = make_corr(
-        [rc.IterativeMatcher(rc.restrict(m(0) | m(6), term_early_at="b1.a"))], options={"split_heads": "all"}
-    )
-    res[f"resid-0-begin"] = make_corr(
-        [rc.IterativeMatcher(rc.restrict(m(4) | m(7), term_early_at="b1.a"))], options={"split_heads": "all"}
-    )
-    res[f"resid-0-diag"] = make_corr(
-        [rc.IterativeMatcher(rc.restrict(m(1) | m(2) | m(3) | m(5), term_early_at="b1.a"))],
-        options={"split_heads": "all"},
+    res[f"resid-0-prev"] = make_corr_a([rc.IterativeMatcher(rc.restrict(m(0) | m(6), term_early_at="b1.a"))])
+    res[f"resid-0-begin"] = make_corr_a([rc.IterativeMatcher(rc.restrict(m(4) | m(7), term_early_at="b1.a"))])
+    res[f"resid-0-diag"] = make_corr_a(
+        [rc.IterativeMatcher(rc.restrict(m(1) | m(2) | m(3) | m(5), term_early_at="b1.a"))]
     )
 
     # EMBEDDING-VALUE
