@@ -6,6 +6,7 @@ from datetime import datetime
 
 import torch
 
+import utils
 import rust_circuit as rc
 from interp.circuit.causal_scrubbing.hypothesis import (Correspondence)
 from interp.circuit.causal_scrubbing.experiment import Experiment, ExperimentEvalSettings
@@ -78,7 +79,7 @@ def run_hypothesis(
         }
         with open(os.path.join(RESULTS_PATH, f"{save_name}.pkl"), "wb") as f:
             pickle.dump((res, inp_ixes, meta), f)
-    return res, ind_candidates_mask, repeats_mask, ind_candidates_later_occur_mask, scrubbed_circuit, inps
+    return res, ind_candidates_mask, repeats_mask, ind_candidates_later_occur_mask, scrubbed_circuit, inps, inp_ixes
 
 
 def get_inputs_from_model(model: rc.Circuit):
@@ -89,7 +90,7 @@ def get_inputs_from_model(model: rc.Circuit):
 def run_experiment(
     exps, exp_name: str, model: rc.Circuit, toks, candidates, tokenizer, samples=10000, save_name="", verbose=0
 ):
-    res, ind_candidates_mask, repeats_mask, ind_candidates_later_occur_mask, scrubbed_circuit, inps = run_hypothesis(
+    res, ind_candidates_mask, repeats_mask, ind_candidates_later_occur_mask, scrubbed_circuit, inps, inp_ixes = run_hypothesis(
         model,
         toks,
         exps[exp_name][0],
@@ -106,17 +107,25 @@ def run_experiment(
     print(f"{res.mean().item():>10.3f}{res.var().item():>10.3f}{res.shape[0] * res.shape[1]:>10}")
 
     print("CANDIDATES")
-    c_res = res[ind_candidates_mask]
+    # Apply mask to INPUT
+    c_res = res[ind_candidates_mask[:, :-1]]
     print(f"{c_res.mean().item():>10.3f}{c_res.var().item():>10.3f}{c_res.shape[0]:>10}")
     # print(f"unnormed {(res * ind_candidates_mask).mean():.3f}")
 
     print("LATER CANDIDATES")
-    lc_res = res[ind_candidates_later_occur_mask]
+    # Apply mask to INPUT
+    lc_res = res[ind_candidates_later_occur_mask[:, :-1]]
     print(f"{lc_res.mean().item():>10.3f}{lc_res.var().item():>10.3f}{lc_res.shape[0]:>10}")
 
     print("REPEATS")
-    lc_res = res[repeats_mask]
-    print(f"{lc_res.mean().item():>10.3f}{lc_res.var().item():>10.3f}{lc_res.shape[0]:>10}")
+    # Apply mask to OUTPUT
+    r_res = res[repeats_mask[:, 1:]]
+    print(f"{r_res.mean().item():>10.3f}{r_res.var().item():>10.3f}{r_res.shape[0]:>10}")
+
+    print("UNCOMMON REPEATS")
+    # Apply mask to OUTPUT
+    untop_100_mask = utils.build_token_frequency_filter(200)[inp_ixes]
+    ur_res = res[repeats_mask.logical_and(untop_100_mask)[:, 1:]]
+    print(f"{ur_res.mean().item():>10.3f}{ur_res.var().item():>10.3f}{ur_res.shape[0]:>10}")
 
     return res, c_res, lc_res, scrubbed_circuit, inps
-    
