@@ -6,8 +6,8 @@ import pickle
 import os.path
 from utils import compare_saa_in_cui
 
-DATA_PATH = 'data'
-RESULTS_PATH = 'results'
+DATA_PATH = "data"
+RESULTS_PATH = "results"
 
 # The first step is to ensure you have all the pickles you need for the
 # visualization. This generally means running experiments.py with an --idx

@@ -8,6 +8,8 @@ from interp.tools.indexer import SLICER as S
 from interp.tools.indexer import TORCH_INDEXER as I
 from interp.tools.rrfs import RRFS_DIR
 
+from typing import Optional
+
 DEVICE = "cuda:0"
 seq_len = 300
 
@@ -53,7 +55,12 @@ def load_model_and_data():
 
 
 @torch.inference_mode()
-def construct_circuit(split_heads: str = "labelled", split_pth_ov_by_pt_or_not: bool = False, transpose_head=None):
+def construct_circuit(
+    split_heads: str = "labelled",
+    split_pth_ov_by_pt_or_not: bool = False,
+    transpose_head=None,
+    swap: Optional[tuple[str, str]] = None,
+):
     """Load the 2L attn-only model and make circuit that calculates loss on the dataset, with empty inputs"""
 
     orig_circuit, tok_embeds, pos_embeds, tokenizer, extra_args, toks_int_values = load_model_and_data()
@@ -148,6 +155,16 @@ def construct_circuit(split_heads: str = "labelled", split_pth_ov_by_pt_or_not: 
 
         model = model.update(k.chain("a0.yes_prev").chain("a.comb_v"), lambda x: new_comb_v)
         model = model.update(k.chain("a0.yes_prev").chain("a.head.on_inp"), lambda x: x.cast_module().substitute())
+
+    if swap:
+        q = lambda x: rc.IterativeMatcher(x).chain(rc.restrict(x.replace(".", ".w.q."), end_depth=3))
+        k = lambda x: rc.IterativeMatcher(x).chain(rc.restrict(x.replace(".", ".w.k."), end_depth=3))
+
+        for func in [q, k]:
+            attn_probs1 = model.get_unique(func(swap[0]))
+            attn_probs2 = model.get_unique(func(swap[1]))
+            model = model.update(func(swap[0]), lambda x: attn_probs2)
+            model = model.update(func(swap[1]), lambda x: attn_probs1)
 
     return model, good_induction_candidate, tokenizer, toks_int_values
 
