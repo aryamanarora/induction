@@ -6,7 +6,7 @@ from datetime import datetime
 
 import torch
 
-import utils
+from masks import get_all_masks
 import rust_circuit as rc
 from interp.circuit.causal_scrubbing.hypothesis import (Correspondence)
 from interp.circuit.causal_scrubbing.experiment import Experiment, ExperimentEvalSettings
@@ -19,22 +19,6 @@ DEVICE = "cuda:0"
 RESULTS_PATH = "results"
 DATA_PATH = "data"
 SEED = 42
-
-
-def get_induction_candidate_masks(
-    inp_ixes: torch.Tensor
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """
-    inp_ixes is a 1d Tensor of ints representing the dataset indices we are interested in.
-    Return two 2d Tensors of bools indicating, for each dataset row specified in inp_ixes, whether each token in that row is a good induction candidate (in the second tensor, we exclude first occurrences of each token in each row)
-    """
-    with open(os.path.join(DATA_PATH, "mask_candidates.pkl"), "rb") as f:
-        candidates_mask = pickle.load(f)
-    with open(os.path.join(DATA_PATH, "mask_repeats.pkl"), "rb") as f:
-        repeats_mask = pickle.load(f)
-    with open(os.path.join(DATA_PATH, "mask_repeat_candidates.pkl"), "rb") as f:
-        repeat_candidates_mask = pickle.load(f)
-    return candidates_mask[inp_ixes], repeats_mask[inp_ixes], repeat_candidates_mask[inp_ixes]
 
 
 def get_inputs_from_model(model: rc.Circuit):
@@ -57,6 +41,7 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0):
     scrubbed_circuit = exp.scrub()
     inps = get_inputs_from_model(scrubbed_circuit.circuit)
     inp_ixes = inps[:, -1]
+    all_masks = get_all_masks(inp_ixes)
     inps = inps[:, :-1]
     if verbose:
         scrubbed_circuit.print()
@@ -65,12 +50,11 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0):
         if tokenizer is not None:
             pprint(tokenizer.batch_decode(inps))
             binps = inps.clone()
-            binps[get_induction_candidate_masks(inp_ixes)[0]] = inps[0][0]
+            binps[all_masks["induction_candidates"]] = inps[0][0]
             pprint(tokenizer.batch_decode(binps))
 
     if verbose:
         print("Building induction candidates masks")
-    ind_candidates_mask, repeats_mask, ind_candidates_later_occur_mask = get_induction_candidate_masks(inp_ixes)
 
     if save_name:
         meta = {
@@ -83,23 +67,14 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0):
             pickle.dump((res, inp_ixes, meta), f)
     print(exp_name.upper())
 
-    untop_200_mask = utils.build_token_frequency_filter(200)[inp_ixes]
-    ur_mask = repeats_mask.logical_and(untop_200_mask)
-    with open(os.path.join(DATA_PATH, "mask_ends_of_repeated_bigrams.pkl"), "rb") as f:
-        erb_mask = pickle.load(f)[inp_ixes]
-    nerb_ur_mask = erb_mask.logical_not().logical_and(ur_mask)
-    with open(os.path.join(DATA_PATH, "mask_misleading_induction.pkl"), "rb") as f:
-        mi_mask = pickle.load(f)[inp_ixes]
-    mi_mask = mi_mask[:, 1:].logical_and(untop_200_mask[:, :-1])
-
     evals = [
         ("OVERALL",                  torch.ones_like(res, dtype=torch.bool)),
-        ("CANDIDATES",               ind_candidates_mask[:, :-1]),
-        ("LATER CANDIDATES",         ind_candidates_later_occur_mask[:, :-1]),
-        ("REPEATS",                  repeats_mask[:, 1:]),
-        ("UNCOMMON REPEATS",         ur_mask[:, 1:]),
-        ("NON-ERB UNCOMMON REPEATS", nerb_ur_mask[:, 1:]),
-        ("MISLEADING INDUCTION",     mi_mask),
+        ("CANDIDATES",               all_masks["induction_candidates"]),
+        ("LATER CANDIDATES",         all_masks["repeat_candidates"]),
+        ("REPEATS",                  all_masks["repeats"]),
+        ("UNCOMMON REPEATS",         all_masks["uncommon_repeats"]),
+        ("NON-ERB UNCOMMON REPEATS", all_masks["nerb_uncommon_repeats"]),
+        ("MISLEADING INDUCTION",     all_masks["misleading_induction"]),
     ]
     for eval_name, mask in evals:
         print(eval_name)
