@@ -59,7 +59,8 @@ def construct_circuit(
     split_heads: str = "labelled",
     split_pth_ov_by_pt_or_not: bool = False,
     transpose_head=None,
-    swap: Optional[tuple[str, str]] = None,
+    swap: Optional[tuple[tuple[int, int], tuple[int, int]]] = None,
+    flip: Optional[tuple[int, int]] = None,
 ):
     """Load the 2L attn-only model and make circuit that calculates loss on the dataset, with empty inputs"""
 
@@ -156,15 +157,25 @@ def construct_circuit(
         model = model.update(k.chain("a0.yes_prev").chain("a.comb_v"), lambda x: new_comb_v)
         model = model.update(k.chain("a0.yes_prev").chain("a.head.on_inp"), lambda x: x.cast_module().substitute())
 
-    if swap:
-        q = lambda x: rc.IterativeMatcher(x).chain(rc.restrict(x.replace(".", ".w.q."), end_depth=3))
-        k = lambda x: rc.IterativeMatcher(x).chain(rc.restrict(x.replace(".", ".w.k."), end_depth=3))
+    q = lambda l, h: rc.IterativeMatcher(f"a{l}.head{h}").chain(
+        rc.restrict(f"a{l}.head{h}".replace(".", ".w.q."), end_depth=3)
+    )
+    k = lambda l, h: rc.IterativeMatcher(f"a{l}.head{h}").chain(
+        rc.restrict(f"a{l}.head{h}".replace(".", ".w.k."), end_depth=3)
+    )
 
+    if swap:
         for func in [q, k]:
-            attn_probs1 = model.get_unique(func(swap[0]))
-            attn_probs2 = model.get_unique(func(swap[1]))
-            model = model.update(func(swap[0]), lambda x: attn_probs2)
-            model = model.update(func(swap[1]), lambda x: attn_probs1)
+            attn_probs1 = model.get_unique(func(*swap[0]))
+            attn_probs2 = model.get_unique(func(*swap[1]))
+            model = model.update(func(*swap[0]), lambda x: attn_probs2)
+            model = model.update(func(*swap[1]), lambda x: attn_probs1)
+
+    if flip:
+        q_w = model.get_unique(q(*flip))
+        k_w = model.get_unique(k(*flip))
+        model = model.update(q(*flip), lambda x: k_w)
+        model = model.update(k(*flip), lambda x: q_w)
 
     return model, good_induction_candidate, tokenizer, toks_int_values
 

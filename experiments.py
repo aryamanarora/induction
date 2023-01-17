@@ -78,16 +78,15 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
     res["a1-ind-transpose"] = make_corr(options={"transpose_head": "a1.ind"})
     for l in range(2):
         for h in range(8):
-            res[f"{l}{h}-transpose"] = make_corr(options={"split_heads": "all", "transpose_head": f"b{l}.a.head{h}"})
+            res[f"transpose-{l}{h}"] = make_corr(options={"split_heads": "all", "transpose_head": f"b{l}.a.head{h}"})
+            res[f"transpose-{l}{h}-nopos"] = make_corr(options={"split_heads": "all", "flip": (l, h)})
 
     # swap
     for a in range(2 * 8):
         for b in range(a + 1, 2 * 8):
             l, h = a // 8, a % 8
             l2, h2 = b // 8, b % 8
-            res[f"swap-{l}{h}-{l2}{h2}"] = make_corr(
-                options={"split_heads": "all", "swap": (f"a{l}.head{h}", f"a{l2}.head{h2}")}
-            )
+            res[f"swap-{l}{h}-{l2}{h2}"] = make_corr(options={"split_heads": "all", "swap": ((l, h), (l2, h2))})
 
     # BASELINE
     res["baseline"] = make_corr([rc.IterativeMatcher("a1.ind")])
