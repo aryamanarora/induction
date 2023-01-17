@@ -124,8 +124,17 @@ def run_experiment(
 
     print("UNCOMMON REPEATS")
     # Apply mask to OUTPUT
-    untop_100_mask = utils.build_token_frequency_filter(200)[inp_ixes]
-    ur_res = res[repeats_mask.logical_and(untop_100_mask)[:, 1:]]
+    untop_200_mask = utils.build_token_frequency_filter(200)[inp_ixes]
+    ur_mask = repeats_mask.logical_and(untop_200_mask)
+    ur_res = res[ur_mask[:, 1:]]
     print(f"{ur_res.mean().item():>10.3f}{ur_res.var().item():>10.3f}{ur_res.shape[0]:>10}")
+
+    print("NON-ERB UNCOMMON REPEATS")
+    with open(os.path.join(DATA_PATH, "mask_ends_of_repeated_bigrams.pkl"), "rb") as f:
+        erb_mask = pickle.load(f)[inp_ixes]
+    nerb_ur_mask = erb_mask.logical_not().logical_and(ur_mask)
+    # Apply mask to OUTPUT
+    neur_res = res[nerb_ur_mask[:, 1:]]
+    print(f"{neur_res.mean().item():>10.3f}{neur_res.var().item():>10.3f}{neur_res.shape[0]:>10}")
 
     return res, c_res, lc_res, scrubbed_circuit, inps

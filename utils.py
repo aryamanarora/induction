@@ -100,7 +100,7 @@ def load_good_induction_candidates():
     )
 
 
-def build_token_filters():
+def build_basic_token_filters():
     inps = load_inputs()[:, :-1]
     good_induction_candidates = load_good_induction_candidates().to(dtype=torch.bool)
 
@@ -120,6 +120,30 @@ def build_token_filters():
         pickle.dump(repeats_mask, f)
     with open(os.path.join(DATA_PATH, "mask_repeat_candidates.pkl"), "wb") as f:
         pickle.dump(repeats_mask.logical_and(candidates_mask), f)
+
+
+def build_end_of_repeated_bigram_filter():
+    """
+    Pickle and return a bool tensor of shape 104091 x 301 (dataset without index
+    column) indicating whether the given dataset token is the end of a repeated
+    bigram in that example (i.e. whether performing strict induction on the
+    previous token would upweigh the given token).
+    """
+    inps = load_inputs()[:, :-1]
+    end_of_repeated_bigram_mask = torch.zeros_like(inps, dtype=torch.bool)
+    for i, row in tqdm(enumerate(inps), total=inps.shape[0]):
+        fst = row[0].item()
+        snd = row[1].item()
+        seen_bigrams = set([(fst, snd)])
+        for j, tok in enumerate(row[2:-1]):
+            fst, snd = snd, tok.item()
+            if (fst, snd) in seen_bigrams:
+                end_of_repeated_bigram_mask[i, j+2] = True
+            else:
+                seen_bigrams.add((fst, snd))
+    with open(os.path.join(DATA_PATH, "mask_ends_of_repeated_bigrams.pkl"), "wb") as f:
+        pickle.dump(end_of_repeated_bigram_mask, f)
+
 
 
 def decode_and_highlight(seq_to_decode, highlight_mask):
