@@ -4,7 +4,9 @@ import argparse
 import torch
 from tqdm import tqdm
 
-from experiments import make_experiments, make_make_corr, run, FixedSampler
+from experiments import make_experiments, make_make_corr, FixedSampler
+from main import run_experiment
+from utils import load_tokenizer
 
 
 def compare(exp1, exp2, num_samples, idx, verbose, plot=True):
@@ -13,10 +15,11 @@ def compare(exp1, exp2, num_samples, idx, verbose, plot=True):
     assert exp1 in list(experiments.keys())
     assert exp2 in list(experiments.keys())
 
-    res1, _, _, _, inps1, tokenizer = run(
-        experiments, exp1, num_samples if exp1 != "unscrubbed" else idx + 1, False, verbose
+    tokenizer = load_tokenizer()
+    res1, _, inps1 = run_experiment(
+        experiments, exp1, num_samples if exp1 != "unscrubbed" else idx + 1, "", verbose
     )
-    res2, _, _, _, inps2, _ = run(experiments, exp2, num_samples if exp2 != "unscrubbed" else idx + 1, False, verbose)
+    res2, _, inps2 = run_experiment(experiments, exp2, num_samples if exp2 != "unscrubbed" else idx + 1, "", verbose)
 
     mean1 = res1.mean(dim=0)
     mean2 = res2.mean(dim=0)
