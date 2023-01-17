@@ -74,54 +74,36 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0):
 
     if save_name:
         meta = {
-            "save_name"       : save_name,
-            "seed"            : SEED,
-            "samples"         : samples,
-            "timestamp"       : datetime.now(pytz.timezone("America/Los_Angeles")),
+            "save_name": save_name,
+            "seed"     : SEED,
+            "samples"  : samples,
+            "timestamp": datetime.now(pytz.timezone("America/Los_Angeles")),
         }
         with open(os.path.join(RESULTS_PATH, f"{save_name}.pkl"), "wb") as f:
             pickle.dump((res, inp_ixes, meta), f)
     print(exp_name.upper())
-    print("OVERALL")
-    print(f"{res.mean().item():>10.3f}{res.var().item():>10.3f}{res.shape[0] * res.shape[1]:>10}")
 
-    print("CANDIDATES")
-    # Apply mask to INPUT
-    c_res = res[ind_candidates_mask[:, :-1]]
-    print(f"{c_res.mean().item():>10.3f}{c_res.var().item():>10.3f}{c_res.shape[0]:>10}")
-    # print(f"unnormed {(res * ind_candidates_mask).mean():.3f}")
-
-    print("LATER CANDIDATES")
-    # Apply mask to INPUT
-    lc_res = res[ind_candidates_later_occur_mask[:, :-1]]
-    print(f"{lc_res.mean().item():>10.3f}{lc_res.var().item():>10.3f}{lc_res.shape[0]:>10}")
-
-    print("REPEATS")
-    # Apply mask to OUTPUT
-    r_res = res[repeats_mask[:, 1:]]
-    print(f"{r_res.mean().item():>10.3f}{r_res.var().item():>10.3f}{r_res.shape[0]:>10}")
-
-    print("UNCOMMON REPEATS")
-    # Apply mask to OUTPUT
     untop_200_mask = utils.build_token_frequency_filter(200)[inp_ixes]
     ur_mask = repeats_mask.logical_and(untop_200_mask)
-    ur_res = res[ur_mask[:, 1:]]
-    print(f"{ur_res.mean().item():>10.3f}{ur_res.var().item():>10.3f}{ur_res.shape[0]:>10}")
-
-    print("NON-ERB UNCOMMON REPEATS")
     with open(os.path.join(DATA_PATH, "mask_ends_of_repeated_bigrams.pkl"), "rb") as f:
         erb_mask = pickle.load(f)[inp_ixes]
     nerb_ur_mask = erb_mask.logical_not().logical_and(ur_mask)
-    # Apply mask to OUTPUT
-    neur_res = res[nerb_ur_mask[:, 1:]]
-    print(f"{neur_res.mean().item():>10.3f}{neur_res.var().item():>10.3f}{neur_res.shape[0]:>10}")
-
-    print("MISLEADING INDUCTION")
-    # Apply mask to OUTPUT
     with open(os.path.join(DATA_PATH, "mask_misleading_induction.pkl"), "rb") as f:
         mi_mask = pickle.load(f)[inp_ixes]
     mi_mask = mi_mask[:, 1:].logical_and(untop_200_mask[:, :-1])
-    mi_res = res[mi_mask]
-    print(f"{mi_res.mean().item():>10.3f}{mi_res.var().item():>10.3f}{mi_res.shape[0]:>10}")
+
+    evals = [
+        ("OVERALL",                  torch.ones_like(res, dtype=torch.bool)),
+        ("CANDIDATES",               ind_candidates_mask[:, :-1]),
+        ("LATER CANDIDATES",         ind_candidates_later_occur_mask[:, :-1]),
+        ("REPEATS",                  repeats_mask[:, 1:]),
+        ("UNCOMMON REPEATS",         ur_mask[:, 1:]),
+        ("NON-ERB UNCOMMON REPEATS", nerb_ur_mask[:, 1:]),
+        ("MISLEADING INDUCTION",     mi_mask),
+    ]
+    for eval_name, mask in evals:
+        print(eval_name)
+        masked_res = res[mask]
+        print(f"{masked_res.mean().item():>10.3f}{masked_res.var().item():>10.3f}{masked_res.shape[0]:>10}")
 
     return res, scrubbed_circuit, inps
