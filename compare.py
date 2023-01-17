@@ -81,7 +81,7 @@ def main():
     parser.add_argument("--exp1", action="store", dest="exp_name", type=str, default="unscrubbed")
     parser.add_argument("--exp2", action="store", dest="exp2_name", type=str, default="baseline")
     parser.add_argument("--type", action="store", dest="type", type=str, default="compare")
-    parser.add_argument("--samples", action="store", dest="samples", type=int, default=10000)
+    parser.add_argument("--samples", action="store", dest="samples", type=int, default=1000)
     parser.add_argument("--idx", action="store", dest="idx", type=int, default=0)
     parser.add_argument("--verbose", action="store", dest="verbose", type=int, default=0)
 
