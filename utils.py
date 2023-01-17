@@ -8,6 +8,7 @@ import plotly.express as px
 from tqdm import tqdm
 from colorama import Fore, Back, Style
 from typing import Any, Callable
+from collections import defaultdict
 
 from interp import cui
 from interp.ui.very_named_tensor import VeryNamedTensor
@@ -134,7 +135,7 @@ def build_end_of_repeated_bigram_filter():
         fst = row[0].item()
         snd = row[1].item()
         seen_bigrams = set([(fst, snd)])
-        for j, tok in enumerate(row[2:-1]):
+        for j, tok in enumerate(row[2:]):
             fst, snd = snd, tok.item()
             if (fst, snd) in seen_bigrams:
                 end_of_repeated_bigram_mask[i, j+2] = True
@@ -142,6 +143,23 @@ def build_end_of_repeated_bigram_filter():
                 seen_bigrams.add((fst, snd))
     with open(os.path.join(DATA_PATH, "mask_ends_of_repeated_bigrams.pkl"), "wb") as f:
         pickle.dump(end_of_repeated_bigram_mask, f)
+
+
+def build_misleading_induction_filter():
+    inps = load_inputs()[:, :-1]
+    misleading_induction_mask = torch.zeros_like(inps, dtype=torch.bool)
+    for i, row in tqdm(enumerate(inps), total=inps.shape[0]):
+        fst = row[0].item()
+        snd = row[1].item()
+        seen_bigrams = defaultdict(set)
+        seen_bigrams[fst].add(snd)
+        for j, tok in enumerate(row[2:]):
+            fst, snd = snd, tok.item()
+            if fst in seen_bigrams and snd not in seen_bigrams[fst]:
+                misleading_induction_mask[i, j+2] = True
+            seen_bigrams[fst].add(snd)
+    with open(os.path.join(DATA_PATH, "mask_misleading_induction.pkl"), "wb") as f:
+        pickle.dump(misleading_induction_mask, f)
 
 
 

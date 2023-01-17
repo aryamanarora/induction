@@ -137,4 +137,12 @@ def run_experiment(
     neur_res = res[nerb_ur_mask[:, 1:]]
     print(f"{neur_res.mean().item():>10.3f}{neur_res.var().item():>10.3f}{neur_res.shape[0]:>10}")
 
+    print("MISLEADING INDUCTION")
+    # Apply mask to OUTPUT
+    with open(os.path.join(DATA_PATH, "mask_misleading_induction.pkl"), "rb") as f:
+        mi_mask = pickle.load(f)[inp_ixes]
+    mi_mask = mi_mask[:, 1:].logical_and(untop_200_mask[:, :-1])
+    mi_res = res[mi_mask]
+    print(f"{mi_res.mean().item():>10.3f}{mi_res.var().item():>10.3f}{mi_res.shape[0]:>10}")
+
     return res, c_res, lc_res, scrubbed_circuit, inps
