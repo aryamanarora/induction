@@ -8,7 +8,7 @@ import torch
 
 from masks import get_all_masks
 import rust_circuit as rc
-from interp.circuit.causal_scrubbing.hypothesis import (Correspondence)
+from interp.circuit.causal_scrubbing.hypothesis import Correspondence
 from interp.circuit.causal_scrubbing.experiment import Experiment, ExperimentEvalSettings
 from interp.circuit.causal_scrubbing.dataset import Dataset
 
@@ -28,6 +28,13 @@ def get_inputs_from_model(model: rc.Circuit):
 
 @torch.inference_mode()
 def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0):
+    """Run a scrubbing experiments.
+    Inputs:
+    - exps: A dictionary of experiment names mapped to correspondences and options.
+    - exp_name: Experiment name.
+    - samples: Number of samples to run from dataset.
+    - save_name: File to save info in.
+    - verbose: How much to print during experiment."""
     corr, options, _ = exps[exp_name]
     options = options or {}
     model, _, tokenizer, toks = construct_circuit(**options)
@@ -59,8 +66,8 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0):
     if save_name:
         meta = {
             "save_name": save_name,
-            "seed"     : SEED,
-            "samples"  : samples,
+            "seed": SEED,
+            "samples": samples,
             "timestamp": datetime.now(pytz.timezone("America/Los_Angeles")),
         }
         with open(os.path.join(RESULTS_PATH, f"{save_name}.pkl"), "wb") as f:
@@ -68,13 +75,13 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0):
     print(exp_name.upper())
 
     evals = [
-        ("OVERALL",                  torch.ones_like(res, dtype=torch.bool)),
-        ("CANDIDATES",               all_masks["induction_candidates"]),
-        ("LATER CANDIDATES",         all_masks["repeat_candidates"]),
-        ("REPEATS",                  all_masks["repeats"]),
-        ("UNCOMMON REPEATS",         all_masks["uncommon_repeats"]),
+        ("OVERALL", torch.ones_like(res, dtype=torch.bool)),
+        ("CANDIDATES", all_masks["induction_candidates"]),
+        ("LATER CANDIDATES", all_masks["repeat_candidates"]),
+        ("REPEATS", all_masks["repeats"]),
+        ("UNCOMMON REPEATS", all_masks["uncommon_repeats"]),
         ("NON-ERB UNCOMMON REPEATS", all_masks["nerb_uncommon_repeats"]),
-        ("MISLEADING INDUCTION",     all_masks["misleading_induction"]),
+        ("MISLEADING INDUCTION", all_masks["misleading_induction"]),
     ]
     for eval_name, mask in evals:
         print(eval_name)

@@ -59,7 +59,8 @@ def construct_circuit(
     split_heads: str = "labelled",
     split_pth_ov_by_pt_or_not: bool = False,
     transpose_head=None,
-    swap: Optional[tuple[tuple[int, int], tuple[int, int]]] = None,
+    swap_q: Optional[tuple[tuple[int, int], tuple[int, int]]] = None,
+    swap_k: Optional[tuple[tuple[int, int], tuple[int, int]]] = None,
     flip: Optional[tuple[int, int]] = None,
 ):
     """Load the 2L attn-only model and make circuit that calculates loss on the dataset, with empty inputs"""
@@ -155,16 +156,26 @@ def construct_circuit(
         model = model.update(k.chain("a0.yes_prev").chain("a.comb_v"), lambda x: new_comb_v)
         model = model.update(k.chain("a0.yes_prev").chain("a.head.on_inp"), lambda x: x.cast_module().substitute())
 
+    # swapping weights between heads
     q = lambda l, h: rc.IterativeMatcher(f"b{l}.a.head{h}").chain(rc.restrict(f"a{l}.w.q.head{h}", end_depth=3))
     k = lambda l, h: rc.IterativeMatcher(f"b{l}.a.head{h}").chain(rc.restrict(f"a{l}.w.k.head{h}", end_depth=3))
+    funcs = []
+    swap = None
+    if swap_q:
+        funcs.append(q)
+        swap = swap_q
+    if swap_k:
+        funcs.append(k)
+        swap = swap_k
 
     if swap:
-        for func in [q, k]:
+        for func in funcs:
             attn_probs1 = model.get_unique(func(*swap[0]))
             attn_probs2 = model.get_unique(func(*swap[1]))
             model = model.update(func(*swap[0]), lambda x: attn_probs2)
             model = model.update(func(*swap[1]), lambda x: attn_probs1)
 
+    # transposing the attention scores of a particular head
     if flip:
         q_w = model.get_unique(q(*flip))
         k_w = model.get_unique(k(*flip))

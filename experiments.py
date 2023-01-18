@@ -1,6 +1,6 @@
 # %%
 import argparse
-from typing import Optional
+from typing import Optional, Any
 from functools import partial
 
 import torch
@@ -31,7 +31,7 @@ class FixedSampler(CondSampler):
 
 
 def make_corr(
-    children: list[rc.IterativeMatcher] = [], options: Optional[dict[str, str]] = None, sampler=ExactSampler()
+    children: list[rc.IterativeMatcher] = [], options: Optional[dict[str, Any]] = None, sampler=ExactSampler()
 ):
     """Make a correspondence graph using a specific sampler."""
     corr = Correspondence()
@@ -56,7 +56,9 @@ def m(*head: int):
 
 
 # EXPERIMENTS
-def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Optional[str]]]]:
+def make_experiments(
+    make_corr=make_make_corr(ExactSampler()),
+) -> dict[str, tuple[Correspondence, dict[str, Optional[str]]]]:
     res = {}
 
     def make_corr_i(args: list[rc.IterativeMatcher]):
@@ -77,18 +79,17 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
     # UNSCRUBBED
     res["unscrubbed"] = make_corr()
 
-    # 1.5 and 1.6
-    a15 = rc.IterativeMatcher("b1.a.head5").chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-    a16 = rc.IterativeMatcher("b1.a.head6").chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-    for head, matcher in [("1.5", a15), ("1.6", a16)]:
+    # head-k-child head
+    for i in range(8):
+        matcher = rc.IterativeMatcher(f"b1.a.head{i}").chain(rc.restrict("a.head.on_inp", term_if_matches=True))
         child_k = matcher.children_matcher({2})
-        res[f"{head}-k"] = make_corr_a([child_k])
-        res[f"{head}-k-emb"] = make_corr_a([child_k.chain(embeds)])
-        for i in range(8):
-            res[f"{head}-k-0.{i}"] = make_corr_a([child_k.chain(m(i))])
-        res[f"{head}-k-0.06"] = make_corr_a([child_k.chain(m(0, 6))])
-        res[f"{head}-k-0.123457"] = make_corr_a([child_k.chain(m(1, 2, 3, 4, 5, 7))])
-        res[f"{head}-k-0.123457e"] = make_corr_a([child_k.chain(m(1, 2, 3, 4, 5, 7) | embeds)])
+        res[f"k-1.{i}"] = make_corr_a([child_k])
+        res[f"k-1.{i}-emb"] = make_corr_a([child_k.chain(embeds)])
+        for j in range(8):
+            res[f"k-1.{i}-0.{j}"] = make_corr_a([child_k.chain(m(j))])
+        res[f"k-1.{i}-0.06"] = make_corr_a([child_k.chain(m(0, 6))])
+        res[f"k-1.{i}-0.123457"] = make_corr_a([child_k.chain(m(1, 2, 3, 4, 5, 7))])
+        res[f"k-1.{i}-0.123457e"] = make_corr_a([child_k.chain(m(1, 2, 3, 4, 5, 7) | embeds)])
 
     # tranpose
     res["a1-ind-transpose"] = make_corr(options={"transpose_head": "a1.ind"})
@@ -102,7 +103,11 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
         for b in range(a + 1, 2 * 8):
             l, h = a // 8, a % 8
             l2, h2 = b // 8, b % 8
-            res[f"swap-{l}{h}-{l2}{h2}"] = make_corr(options={"split_heads": "all", "swap": ((l, h), (l2, h2))})
+            res[f"swap-{l}.{h}-{l2}.{h2}"] = make_corr(
+                options={"split_heads": "all", "swap_k": ((l, h), (l2, h2)), "swap_q": ((l, h), (l2, h2))}
+            )
+            res[f"swap-k-{l}.{h}-{l2}.{h2}"] = make_corr(options={"split_heads": "all", "swap_k": ((l, h), (l2, h2))})
+            res[f"swap-q-{l}.{h}-{l2}.{h2}"] = make_corr(options={"split_heads": "all", "swap_q": ((l, h), (l2, h2))})
 
     # BASELINE
     res["baseline"] = make_corr([rc.IterativeMatcher("a1.ind")])
