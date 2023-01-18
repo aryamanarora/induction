@@ -87,80 +87,11 @@ def replace_toks_by_frequency_rank(toks):
     return torch.take(torch.argsort(common_toks), toks)
 
 
-def build_token_frequency_filter(top_k):
-    inps = load_inputs()[:, :-1]
-    inps_by_frequency = replace_toks_by_frequency_rank(inps)
-    return inps_by_frequency >= top_k
-
-
 def load_good_induction_candidates():
     cache_dir = f"{RRFS_DIR}/ryan/induction_scrub/cached_vals"
     return torch.load(f"{cache_dir}/induction_candidates_2022-10-15 04:48:29.970735.pt").to(
         device=DEVICE, dtype=torch.float32
     )
-
-
-def build_basic_token_filters():
-    inps = load_inputs()[:, :-1]
-    good_induction_candidates = load_good_induction_candidates().to(dtype=torch.bool)
-
-    candidates_mask = torch.zeros_like(inps, dtype=torch.bool)
-    repeats_mask = torch.zeros_like(inps, dtype=torch.bool)
-    for i, row in tqdm(enumerate(inps), total=inps.shape[0]):
-        seen_toks = set()
-        for j, tok in enumerate(row):
-            if good_induction_candidates[tok]:
-                candidates_mask[i, j] = True
-            if tok.item() in seen_toks:
-                repeats_mask[i, j] = True
-            seen_toks.add(tok.item())
-    with open(os.path.join(DATA_PATH, "mask_candidates.pkl"), "wb") as f:
-        pickle.dump(candidates_mask, f)
-    with open(os.path.join(DATA_PATH, "mask_repeats.pkl"), "wb") as f:
-        pickle.dump(repeats_mask, f)
-    with open(os.path.join(DATA_PATH, "mask_repeat_candidates.pkl"), "wb") as f:
-        pickle.dump(repeats_mask.logical_and(candidates_mask), f)
-
-
-def build_end_of_repeated_bigram_filter():
-    """
-    Pickle and return a bool tensor of shape 104091 x 301 (dataset without index
-    column) indicating whether the given dataset token is the end of a repeated
-    bigram in that example (i.e. whether performing strict induction on the
-    previous token would upweigh the given token).
-    """
-    inps = load_inputs()[:, :-1]
-    end_of_repeated_bigram_mask = torch.zeros_like(inps, dtype=torch.bool)
-    for i, row in tqdm(enumerate(inps), total=inps.shape[0]):
-        fst = row[0].item()
-        snd = row[1].item()
-        seen_bigrams = set([(fst, snd)])
-        for j, tok in enumerate(row[2:]):
-            fst, snd = snd, tok.item()
-            if (fst, snd) in seen_bigrams:
-                end_of_repeated_bigram_mask[i, j+2] = True
-            else:
-                seen_bigrams.add((fst, snd))
-    with open(os.path.join(DATA_PATH, "mask_ends_of_repeated_bigrams.pkl"), "wb") as f:
-        pickle.dump(end_of_repeated_bigram_mask, f)
-
-
-def build_misleading_induction_filter():
-    inps = load_inputs()[:, :-1]
-    misleading_induction_mask = torch.zeros_like(inps, dtype=torch.bool)
-    for i, row in tqdm(enumerate(inps), total=inps.shape[0]):
-        fst = row[0].item()
-        snd = row[1].item()
-        seen_bigrams = defaultdict(set)
-        seen_bigrams[fst].add(snd)
-        for j, tok in enumerate(row[2:]):
-            fst, snd = snd, tok.item()
-            if fst in seen_bigrams and snd not in seen_bigrams[fst]:
-                misleading_induction_mask[i, j+2] = True
-            seen_bigrams[fst].add(snd)
-    with open(os.path.join(DATA_PATH, "mask_misleading_induction.pkl"), "wb") as f:
-        pickle.dump(misleading_induction_mask, f)
-
 
 
 def decode_and_highlight(seq_to_decode, highlight_mask):

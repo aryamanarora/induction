@@ -206,25 +206,6 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
     return res
 
 
-def run(experiments, exp_name, samples, save_name, verbose):
-    options = experiments[exp_name][1] or {}
-    model, good_induction_candidate, tokenizer, toks_int_values = construct_circuit(**options)
-
-    res, c_res, lc_res, scrubbed_circuit, inps = run_experiment(
-        experiments,
-        exp_name,
-        model,
-        toks_int_values,
-        good_induction_candidate,
-        tokenizer,
-        verbose=verbose,
-        samples=samples,
-        save_name=save_name,
-    )
-    torch.cuda.empty_cache()
-    return res, c_res, lc_res, scrubbed_circuit, inps, tokenizer
-
-
 # %%
 def main():
     experiments = make_experiments(make_make_corr(ExactSampler()))
@@ -258,7 +239,8 @@ def main():
         if args.save:
             save_name += f"_saa_{args.idx}"
 
-    run(experiments, args.exp_name, args.samples, save_name, args.verbose)
+    run_experiment(experiments, args.exp_name, args.samples, save_name, args.verbose)
+    torch.cuda.empty_cache()
 
 
 if __name__ == "__main__":
