@@ -113,11 +113,9 @@ def construct_circuit(
     expected_loss = rc.conform_all_modules(expected_loss)
 
     model = (
-        expected_loss.update("a1.ind_sum.norm_call", lambda c: c.cast_module().substitute())
-        .update("b1.a.ind_sum", lambda c: c.cast_module().substitute())
-        .update("t.call", lambda c: c.cast_module().substitute())
-        .update("a1.not_ind_sum.norm_call", lambda c: c.cast_module().substitute())
-        .update("b1.a.not_ind_sum", lambda c: c.cast_module().substitute())
+        expected_loss.update("t.call", lambda c: c.cast_module().substitute())
+        .update(rc.Regex(r".*?norm_call.*?"), lambda c: c.cast_module().substitute())
+        .update(rc.Regex(r"\d\.a\."), lambda c: c.cast_module().substitute() if isinstance(c, rc.Module) else c)
     )
 
     if transpose_head:

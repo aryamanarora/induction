@@ -48,8 +48,11 @@ def make_make_corr(sampler):
     return partial(make_corr, sampler=sampler)
 
 
-def m(head: int):
-    return rc.IterativeMatcher(f"b0.a.head{head}")
+def m(*head: int):
+    res = rc.IterativeMatcher(f"b0.a.head{head[0]}")
+    for i in range(1, len(head)):
+        res |= rc.IterativeMatcher(f"b0.a.head{head[i]}")
+    return res
 
 
 # EXPERIMENTS
@@ -74,6 +77,19 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
     # UNSCRUBBED
     res["unscrubbed"] = make_corr()
 
+    # 1.5 and 1.6
+    a15 = rc.IterativeMatcher("b1.a.head5").chain(rc.restrict("a.head.on_inp", term_if_matches=True))
+    a16 = rc.IterativeMatcher("b1.a.head6").chain(rc.restrict("a.head.on_inp", term_if_matches=True))
+    for head, matcher in [("1.5", a15), ("1.6", a16)]:
+        child_k = matcher.children_matcher({2})
+        res[f"{head}-k"] = make_corr_a([child_k])
+        res[f"{head}-k-emb"] = make_corr_a([child_k.chain(embeds)])
+        for i in range(8):
+            res[f"{head}-k-0.{i}"] = make_corr_a([child_k.chain(m(i))])
+        res[f"{head}-k-0.06"] = make_corr_a([child_k.chain(m(0, 6))])
+        res[f"{head}-k-0.123457"] = make_corr_a([child_k.chain(m(1, 2, 3, 4, 5, 7))])
+        res[f"{head}-k-0.123457e"] = make_corr_a([child_k.chain(m(1, 2, 3, 4, 5, 7) | embeds)])
+
     # tranpose
     res["a1-ind-transpose"] = make_corr(options={"transpose_head": "a1.ind"})
     for l in range(2):
@@ -95,20 +111,18 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
         [rc.IterativeMatcher("a1.not_ind") | rc.IterativeMatcher(rc.restrict("b0", term_early_at="b1.a"))]
     )
     for i in range(8):
-        res[f"0.{i}"] = make_corr_a([rc.IterativeMatcher(f"b0.a.head{i}")])
-        res[f"1-0.{i}"] = make_corr_a([rc.IterativeMatcher("b1.a").chain(f"b0.a.head{i}")])
-        res[f"resid-0.{i}"] = make_corr_a([rc.IterativeMatcher(rc.restrict(f"b0.a.head{i}", term_early_at="b1.a"))])
+        res[f"0.{i}"] = make_corr_a([m(i)])
+        res[f"1-0.{i}"] = make_corr_a([rc.IterativeMatcher("b1.a").chain(m(i))])
+        res[f"resid-0.{i}"] = make_corr_a([rc.IterativeMatcher(rc.restrict(m(i), term_early_at="b1.a"))])
         res[f"1.{i}"] = make_corr_a([rc.IterativeMatcher(f"b1.a.head{i}")])
 
     res[f"resid-0"] = make_corr_a([rc.IterativeMatcher(rc.restrict("b0", term_early_at="b1.a"))])
     res[f"resid-0-indiv"] = make_corr_a(
         [rc.IterativeMatcher(rc.restrict(m(i), term_early_at="b1.a")) for i in range(8)]
     )
-    res[f"resid-0-prev"] = make_corr_a([rc.IterativeMatcher(rc.restrict(m(0) | m(6), term_early_at="b1.a"))])
-    res[f"resid-0-begin"] = make_corr_a([rc.IterativeMatcher(rc.restrict(m(4) | m(7), term_early_at="b1.a"))])
-    res[f"resid-0-diag"] = make_corr_a(
-        [rc.IterativeMatcher(rc.restrict(m(1) | m(2) | m(3) | m(5), term_early_at="b1.a"))]
-    )
+    res[f"resid-0-prev"] = make_corr_a([rc.IterativeMatcher(rc.restrict(m(0, 6), term_early_at="b1.a"))])
+    res[f"resid-0-begin"] = make_corr_a([rc.IterativeMatcher(rc.restrict(m(4, 7), term_early_at="b1.a"))])
+    res[f"resid-0-diag"] = make_corr_a([rc.IterativeMatcher(rc.restrict(m(1, 2, 3, 5), term_early_at="b1.a"))])
 
     # EMBEDDING-VALUE
     ev = v.chain("b0.a")
@@ -127,13 +141,13 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
     res[f"a0-v-indep-only"] = make_corr_i([v.chain(m(i)) for i in range(8)])
 
     # scrub subsets of heads
-    res[f"a0-v-0,6"] = make_corr_i([v.chain(embeds | m(0) | m(6))])
-    res[f"a0-v-only0,6"] = make_corr_i([v.chain(m(0) | m(6))])
-    res[f"a0-v-only016"] = make_corr_i([v.chain(m(0) | m(1) | m(6))])
-    res[f"a0-v-not0,6"] = make_corr_i([v.chain(embeds | m(1) | m(2) | m(3) | m(4) | m(5) | m(7))])
-    res[f"a0-v-onlynot0,6"] = make_corr_i([v.chain(m(1) | m(2) | m(3) | m(4) | m(5) | m(7))])
-    res[f"a0-v-all-bad-but-2"] = make_corr_i([v.chain(embeds | m(1) | m(3) | m(4) | m(5) | m(7))])
-    res[f"a0-v-all-bad-but-12"] = make_corr_i([v.chain(embeds | m(3) | m(4) | m(5) | m(7))])
+    res[f"a0-v-0,6"] = make_corr_i([v.chain(embeds | m(0, 6))])
+    res[f"a0-v-only0,6"] = make_corr_i([v.chain(m(0, 6))])
+    res[f"a0-v-only016"] = make_corr_i([v.chain(m(0, 1, 6))])
+    res[f"a0-v-not0,6"] = make_corr_i([v.chain(embeds | m(1, 2, 3, 4, 5, 7))])
+    res[f"a0-v-onlynot0,6"] = make_corr_i([v.chain(m(1, 2, 3, 4, 5, 7))])
+    res[f"a0-v-all-bad-but-2"] = make_corr_i([v.chain(embeds | m(1, 3, 4, 5, 7))])
+    res[f"a0-v-all-bad-but-12"] = make_corr_i([v.chain(embeds | m(3, 4, 5, 7))])
 
     # EMBEDDING-QUERY
     eq = q.chain("b0.a")
@@ -154,7 +168,7 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
     res[f"a0-q-indep-12356"] = make_corr_i([q.chain(m(i)) for i in [2, 5, 1, 3, 6]])
 
     # scrub subsets of heads
-    res[f"a0-q-only-56"] = make_corr_i([q.chain(m(5) | m(6))])
+    res[f"a0-q-only-56"] = make_corr_i([q.chain(m(5, 6))])
 
     # EMBEDDING-KEY
     res["k"] = make_corr([k])
@@ -177,11 +191,11 @@ def make_experiments(make_corr) -> dict[str, tuple[Correspondence, dict[str, Opt
     res["not-pth-k-emb"] = make_corr([k.chain(embeds | rc.Regex(r"\.*yes_prev\.*"))])
 
     # include 0.6 also
-    res["not-pth-k-emb-06"] = make_corr_i([k.chain(embeds | m(0) | m(6))])
-    res["not-pth-k-06"] = make_corr_i([k.chain(m(0) | m(6))])
+    res["not-pth-k-emb-06"] = make_corr_i([k.chain(embeds | m(0, 6))])
+    res["not-pth-k-06"] = make_corr_i([k.chain(m(0, 6))])
     res["not-pth-k-6"] = make_corr_i([k.chain(m(6))])
     res["not-pth-k-7"] = make_corr_i([k.chain(m(7))])
-    res["not-pth-unimp"] = make_corr_i([k.chain(m(1) | m(2) | m(3) | m(4) | m(5) | m(7))])
+    res["not-pth-unimp"] = make_corr_i([k.chain(m(1, 2, 3, 4, 5, 7))])
 
     # PTH-QUERY
     res["pth-q"] = make_corr([q.chain(embeds | rc.Regex(r"\.*not_prev\.*"))])
