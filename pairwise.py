@@ -6,7 +6,9 @@ from experiments import make_experiments
 from main import run_experiment
 
 
-def run_pairs(experiments: dict[str, tuple], exp: str, layer1: int, layer2: int, samples: int = 1000, repeat: bool = True):
+def run_pairs(
+    experiments: dict[str, tuple], exp: str, layer1: int, layer2: int, samples: int = 1000, repeat: bool = True
+):
     """Run pairwise comparisons between heads of one layer and another (or same layer).
     Inputs:
     - experiments: Dictionary of experiments.
@@ -27,7 +29,7 @@ def run_pairs(experiments: dict[str, tuple], exp: str, layer1: int, layer2: int,
     # run experiments
     for h in range(8):
         for i in range((h + 1) if not repeat else 0, len(l)):
-            res, _, _ = run_experiment(experiments, f"{exp}-{layer1}.{h}{l[i]}", 1000, verbose=0)
+            res, _, _ = run_experiment(experiments, f"{exp}-{layer1}.{h}{l[i]}", samples, verbose=0)
             torch.cuda.empty_cache()
             loss = res.mean().item()
             comp[(h, i)] = (4.631 - loss) / (4.631 - 4.2)
