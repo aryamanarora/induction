@@ -155,12 +155,8 @@ def construct_circuit(
         model = model.update(k.chain("a0.yes_prev").chain("a.comb_v"), lambda x: new_comb_v)
         model = model.update(k.chain("a0.yes_prev").chain("a.head.on_inp"), lambda x: x.cast_module().substitute())
 
-    q = lambda l, h: rc.IterativeMatcher(f"a{l}.head{h}").chain(
-        rc.restrict(f"a{l}.head{h}".replace(".", ".w.q."), end_depth=3)
-    )
-    k = lambda l, h: rc.IterativeMatcher(f"a{l}.head{h}").chain(
-        rc.restrict(f"a{l}.head{h}".replace(".", ".w.k."), end_depth=3)
-    )
+    q = lambda l, h: rc.IterativeMatcher(f"b{l}.a.head{h}").chain(rc.restrict(f"a{l}.w.q.head{h}", end_depth=3))
+    k = lambda l, h: rc.IterativeMatcher(f"b{l}.a.head{h}").chain(rc.restrict(f"a{l}.w.k.head{h}", end_depth=3))
 
     if swap:
         for func in [q, k]:
