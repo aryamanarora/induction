@@ -146,7 +146,7 @@ def await_without_await(func: Callable[[], Any]):
         pass
 
 
-def compare_saa_in_cui(comparisons, ix_filter=None):
+def compare_saa_in_cui(comparisons, ix_filter=None, mask=None):
     """
     comparisons is an iterable of pairs (exp1, exp2). We compute the diff for each pair,
     for all example ixes on which we have all the relevant exps data.
@@ -161,6 +161,8 @@ def compare_saa_in_cui(comparisons, ix_filter=None):
         ix_loss_diffs = []
         for exp1, exp2 in comparisons:
             loss_diff = get_diff_mean_per_tok_loss(exp1, exp2, ix)
+            if mask is not None:
+                loss_diff = loss_diff * mask[ix]
             ix_loss_diffs.append(loss_diff)
         all_loss_diffs.append(torch.cat(ix_loss_diffs, dim=0))
 

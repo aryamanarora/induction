@@ -5,6 +5,7 @@
 import pickle
 import os.path
 from utils import compare_saa_in_cui
+from masks import get_all_masks
 
 DATA_PATH = "data"
 RESULTS_PATH = "results"
