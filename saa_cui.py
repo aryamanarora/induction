@@ -47,5 +47,5 @@ comparisons = [
 
 # compare_saa_in_cui(comparisons)
 
-compare_attns_in_cui(["unscrubbed", "0.0"])
+compare_attns_in_cui([("unscrubbed", "0.0")])
 # %%

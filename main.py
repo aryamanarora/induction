@@ -77,7 +77,7 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
                 if len(attn.shape) == 3:
                     attn = attn.reshape(attn.shape[0], 1, attn.shape[1], attn.shape[2])
                 res.append(attn)
-        res = torch.cat(tuple(res), dim=1)
+        res = torch.cat(tuple(res), dim=1).mean(dim=0).unsqueeze(dim=0)
     else:
         res = scrubbed_circuit.evaluate(eval_settings)
 
