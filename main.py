@@ -125,4 +125,4 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
             masked_res = res[mask]
             print(f"{masked_res.mean().item():>10.3f}{masked_res.var().item():>10.3f}{masked_res.shape[0]:>10}")
 
-        return res, scrubbed_circuit, inps
+    return res, scrubbed_circuit, inps

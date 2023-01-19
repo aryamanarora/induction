@@ -4,7 +4,7 @@
 
 import pickle
 import os.path
-from utils import compare_saa_in_cui, compare_attns_in_cui
+from utils import compare_saa_in_cui
 from masks import get_all_masks
 
 DATA_PATH = "data"
@@ -45,7 +45,5 @@ comparisons = [
 # have Comparison (example) set to facet, and Pos(seq) set to axis. The chart
 # type should be Colored Text.
 
-# compare_saa_in_cui(comparisons)
-
-compare_attns_in_cui(["0.0", "unscrubbed"])
+compare_saa_in_cui(comparisons)
 # %%

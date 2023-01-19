@@ -4,11 +4,8 @@ import torch
 import pickle
 import os.path
 import rust_circuit as rc
-import plotly.express as px
-from tqdm import tqdm
 from colorama import Fore, Back, Style
 from typing import Any, Callable
-from collections import defaultdict
 
 from interp import cui
 from interp.ui.very_named_tensor import VeryNamedTensor

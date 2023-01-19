@@ -2,3 +2,5 @@ __pycache__/
 *.code-workspace
 *.pkl
 figs/
+saa_cui.py
+get_data.py
