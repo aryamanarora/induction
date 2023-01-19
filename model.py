@@ -61,7 +61,7 @@ def construct_circuit(
     transpose_head=None,
     swap_q: Optional[tuple[tuple[int, int], tuple[int, int]]] = None,
     swap_k: Optional[tuple[tuple[int, int], tuple[int, int]]] = None,
-    flip: Optional[tuple[int, int]] = None,
+    flip: Optional[tuple[int, int]] = None
 ):
     """Load the 2L attn-only model and make circuit that calculates loss on the dataset, with empty inputs"""
 
@@ -119,6 +119,9 @@ def construct_circuit(
         .update(rc.Regex(r"\d\.a\."), lambda c: c.cast_module().substitute() if isinstance(c, rc.Module) else c)
     )
 
+    # FURTHER MODIFICATIONS
+
+    # transpose a head (probably wrong)
     if transpose_head:
         model = model.update(
             rc.IterativeMatcher(transpose_head)
@@ -127,6 +130,7 @@ def construct_circuit(
             lambda circ: rc.Einsum.from_einsum_string("rqk -> rkq" if len(circ.shape) == 3 else "qk -> kq", circ),
         )
 
+    # scrub the ov by previous tokens or not
     if split_pth_ov_by_pt_or_not:
         k = rc.IterativeMatcher("a1.ind")
 
@@ -175,7 +179,7 @@ def construct_circuit(
             model = model.update(func(*swap[0]), lambda x: attn_probs2)
             model = model.update(func(*swap[1]), lambda x: attn_probs1)
 
-    # transposing the attention scores of a particular head
+    # transposing the attention scores of a particular head (correct)
     if flip:
         q_w = model.get_unique(q(*flip))
         k_w = model.get_unique(k(*flip))

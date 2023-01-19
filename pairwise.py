@@ -4,10 +4,17 @@ import matplotlib.pyplot as plt
 
 from experiments import make_experiments
 from main import run_experiment
+from typing import Optional
 
 
 def run_pairs(
-    experiments: dict[str, tuple], exp: str, layer1: int, layer2: int, samples: int = 1000, repeat: bool = True
+    experiments: dict[str, tuple],
+    exp: str,
+    layer1: int,
+    layer2: int,
+    samples: int = 1000,
+    repeat: bool = True,
+    l: Optional[list] = None,
 ):
     """Run pairwise comparisons between heads of one layer and another (or same layer).
     Inputs:
@@ -20,11 +27,12 @@ def run_pairs(
     comp = {}
 
     # labels/experiment names for layer2 (include scrub of embed/all if possible)
-    l = [f"-{layer2}.{i}" for i in range(8)]
-    if f"{exp}-{layer1}.0-emb" in experiments:
-        l.append("-emb")
-    if f"{exp}-{layer1}.0" in experiments:
-        l.append("")
+    if l is None:
+        l = [f"-{layer2}.{i}" for i in range(8)]
+        if f"{exp}-{layer1}.0-emb" in experiments:
+            l.append("-emb")
+        if f"{exp}-{layer1}.0" in experiments:
+            l.append("")
 
     # run experiments
     for h in range(8):
@@ -46,17 +54,20 @@ def run_pairs(
             g[i][i] = 1
 
     # plot
-    plt.imshow(g, vmin=0.5, vmax=1, cmap="RdBu")
+    plt.imshow(g, vmin=g.min().item(), vmax=g.max().item(), cmap="RdBu")
     plt.title(exp)
     plt.ylabel(f"Layer {layer1}")
     plt.xlabel(f"Layer {layer2}")
+    plt.yticks(list(range(8)), labels=[f"{layer1}.{x}" for x in range(8)])
     plt.xticks(list(range(len(l))), labels=[x[1:] for x in l])
     plt.show()
 
 
 def main():
     experiments = make_experiments()
-    run_pairs(experiments, "k", 1, 0)
+    # l = [f"-0.{i}e" for i in range(8)] + [""]
+    l = ["-0.06", "-0.1235e", "-0.47", "-0", "-emb", ""]
+    run_pairs(experiments, "v", 1, 0, l=l)
 
 
 if __name__ == "__main__":

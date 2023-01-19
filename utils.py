@@ -56,7 +56,7 @@ def load_inputs():
     the inputs of the next-token-prediction task).
     """
     try:
-        with open(os.path.join(DATA_PATH, 'full_inps.pkl'), 'rb') as f:
+        with open(os.path.join(DATA_PATH, "full_inps.pkl"), "rb") as f:
             return pickle.load(f)
     except FileNotFoundError:
         return pickle_inputs()
@@ -114,8 +114,8 @@ def decode_and_highlight(seq_to_decode, highlight_mask):
     return res
 
 
-def get_common_saa_ixes(exps, ix_filter=None):
-    exp_fns = [glob.glob(f"{RESULTS_PATH}/{exp}_saa_*") for exp in exps]
+def get_common_saa_ixes(exps, ix_filter=None, type="saa"):
+    exp_fns = [glob.glob(f"{RESULTS_PATH}/{exp}_{type}_*") for exp in exps]
     exp_ixes = [{int(fn.split("_")[-1].split(".")[0]) for fn in fns} for fns in exp_fns]
     if ix_filter is not None:
         exp_ixes.append(set(ix_filter))
@@ -132,6 +132,7 @@ def get_diff_mean_per_tok_loss(exp1, exp2, inp_ix):
         (torch.zeros((1, 1)), (res2.mean(dim=0, keepdim=True) - res1.mean(dim=0, keepdim=True)).cpu()), dim=1
     )
 
+
 # Copied from remix_utils
 def await_without_await(func: Callable[[], Any]):
     """We want solution files to be usable when run as a script from the command line (where a top level await would
@@ -144,6 +145,39 @@ def await_without_await(func: Callable[[], Any]):
             func().send(None)
     except StopIteration:
         pass
+
+
+def compare_attns_in_cui(exps):
+    inps = load_inputs()[:, :-1]
+    tokenizer = load_tokenizer()
+    common_ixes = list(get_common_saa_ixes({exp for exp in exps}, type="attns"))
+    all_attns = []
+    for ix in common_ixes:
+        all_attns_idx = []
+        for exp in exps:
+            with open(f"{RESULTS_PATH}/{exp}_attns_{ix}.pkl", "rb") as f:
+                res1, _, _ = pickle.load(f)  # res1 shape is [batch, heads, q, k]
+                mean = res1.mean(dim=0).unsqueeze(dim=0)
+                print(exp, mean.shape)
+                all_attns_idx.append(mean)
+        all_attns.append(torch.cat(all_attns_idx, dim=0))
+
+    comparison_names = [f"Attention in {exp}" for exp in exps]
+    vnts = []
+    for i, attns in enumerate(all_attns):
+        b = tokenizer.batch_decode(inps[common_ixes[i]])[:-1]
+        vnts.append(
+            VeryNamedTensor(
+                attns,
+                dim_names=["comparison", "heads", "q", "k"],
+                dim_types=["example", "heads", "seq", "seq"],
+                dim_idx_names=[comparison_names, [f"a{i}" for i in range(16)], b, b],
+                title=f"Example {common_ixes[i]}",
+            )
+        )
+
+    await_without_await(lambda: cui.init(port=6789))
+    await_without_await(lambda: cui.show_tensors(*vnts))
 
 
 def compare_saa_in_cui(comparisons, ix_filter=None, mask=None):

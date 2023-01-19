@@ -61,11 +61,11 @@ def make_experiments(
 ) -> dict[str, tuple[Correspondence, dict[str, Optional[str]]]]:
     res = {}
 
-    def make_corr_i(args: list[rc.IterativeMatcher]):
+    def make_corr_i(args: list[rc.IterativeMatcher] = []):
         """Make corr but split heads individually"""
         return make_corr(args, options={"split_heads": "b0-all"})
 
-    def make_corr_a(args: list[rc.IterativeMatcher]):
+    def make_corr_a(args: list[rc.IterativeMatcher] = []):
         """Make corr but split all heads individually"""
         return make_corr(args, options={"split_heads": "all"})
 
@@ -77,19 +77,24 @@ def make_experiments(
     k = a1_head.children_matcher({2})
 
     # UNSCRUBBED
-    res["unscrubbed"] = make_corr()
+    res["unscrubbed"] = make_corr_a()
 
     # head-k-child head
     for i in range(8):
         matcher = rc.IterativeMatcher(f"b1.a.head{i}").chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-        child_k = matcher.children_matcher({2})
-        res[f"k-1.{i}"] = make_corr_a([child_k])
-        res[f"k-1.{i}-emb"] = make_corr_a([child_k.chain(embeds)])
-        for j in range(8):
-            res[f"k-1.{i}-0.{j}"] = make_corr_a([child_k.chain(m(j))])
-        res[f"k-1.{i}-0.06"] = make_corr_a([child_k.chain(m(0, 6))])
-        res[f"k-1.{i}-0.123457"] = make_corr_a([child_k.chain(m(1, 2, 3, 4, 5, 7))])
-        res[f"k-1.{i}-0.123457e"] = make_corr_a([child_k.chain(m(1, 2, 3, 4, 5, 7) | embeds)])
+        for ch, id in [("q", 1), ("k", 2), ("v", 3)]:
+            ch_matcher = matcher.children_matcher({id})
+            res[f"{ch}-1.{i}"] = make_corr_a([ch_matcher])
+            res[f"{ch}-1.{i}-emb"] = make_corr_a([ch_matcher.chain(embeds)])
+            for j in range(8):
+                res[f"{ch}-1.{i}-0.{j}"] = make_corr_a([ch_matcher.chain(m(j))])
+                res[f"{ch}-1.{i}-0.{j}e"] = make_corr_a([ch_matcher.chain(m(j) | embeds)])
+            res[f"{ch}-1.{i}-0.06"] = make_corr_a([ch_matcher.chain(m(0, 6))])
+            res[f"{ch}-1.{i}-0.47"] = make_corr_a([ch_matcher.chain(m(4, 7))])
+            res[f"{ch}-1.{i}-0.1235e"] = make_corr_a([ch_matcher.chain(m(1, 2, 3, 5) | embeds)])
+            res[f"{ch}-1.{i}-0.123457"] = make_corr_a([ch_matcher.chain(m(1, 2, 3, 4, 5, 7))])
+            res[f"{ch}-1.{i}-0.123457e"] = make_corr_a([ch_matcher.chain(m(1, 2, 3, 4, 5, 7) | embeds)])
+            res[f"{ch}-1.{i}-0"] = make_corr_a([ch_matcher.chain(m(0, 1, 2, 3, 4, 5, 6, 7))])
 
     # tranpose
     res["a1-ind-transpose"] = make_corr(options={"transpose_head": "a1.ind"})
@@ -224,6 +229,7 @@ def main():
     )
     parser.add_argument("--samples", action="store", dest="samples", type=int, default=10000)
     parser.add_argument("--verbose", action="store", dest="verbose", type=int, default=0)
+    parser.add_argument("--attns", action="store_true", dest="attns")
     parser.add_argument("--save", action="store_true", dest="save")
     parser.add_argument(
         "--idx",
@@ -242,9 +248,12 @@ def main():
     if args.idx is not None:
         experiments = make_experiments(make_make_corr(FixedSampler(args.idx)))
         if args.save:
-            save_name += f"_saa_{args.idx}"
+            if args.attns:
+                save_name += f"_attns_{args.idx}"
+            else:
+                save_name += f"_saa_{args.idx}"
 
-    run_experiment(experiments, args.exp_name, args.samples, save_name, args.verbose)
+    run_experiment(experiments, args.exp_name, args.samples, save_name, args.verbose, args.attns)
     torch.cuda.empty_cache()
 
 

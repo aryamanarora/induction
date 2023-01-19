@@ -27,7 +27,7 @@ def get_inputs_from_model(model: rc.Circuit):
 
 
 @torch.inference_mode()
-def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0):
+def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_attns=True):
     """Run a scrubbing experiments.
     Inputs:
     - exps: A dictionary of experiment names mapped to correspondences and options.
@@ -38,6 +38,8 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0):
     corr, options, _ = exps[exp_name]
     options = options or {}
     model, _, tokenizer, toks = construct_circuit(**options)
+    if get_attns:
+        model = rc.substitute_all_modules(model)
 
     if verbose:
         print("Running hypothesis")
@@ -46,13 +48,51 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0):
 
     exp = Experiment(model, ds, corr, num_examples=samples, random_seed=SEED)
     scrubbed_circuit = exp.scrub()
+
     inps = get_inputs_from_model(scrubbed_circuit.circuit)
     inp_ixes = inps[:, -1]
     all_masks = get_all_masks(inp_ixes)
     inps = inps[:, :-1]
+
     if verbose:
         scrubbed_circuit.print()
-    res = scrubbed_circuit.evaluate(eval_settings)
+
+    if get_attns:
+        sampler = eval_settings.get_sampler(len(scrubbed_circuit.ref_ds), scrubbed_circuit.group)
+        res = []
+        for l in range(2):
+            for h in range(8):
+                circ = (
+                    scrubbed_circuit.circuit.get_unique(
+                        rc.IterativeMatcher(f"b{l}.a.head{h}").chain(rc.restrict("a.attn_probs", end_depth=3))
+                    )
+                    if l == 1
+                    else scrubbed_circuit.circuit.get_unique(
+                        rc.IterativeMatcher("b1.a.head0")
+                        .chain(f"b{l}.a.head{h}")
+                        .chain(rc.restrict("a.attn_probs", end_depth=3))
+                    )
+                )
+                attn = sampler.sample(circ).evaluate().cpu()
+                if len(attn.shape) == 3:
+                    attn = attn.reshape(attn.shape[0], 1, attn.shape[1], attn.shape[2])
+                res.append(attn)
+        res = torch.cat(tuple(res), dim=1)
+    else:
+        res = scrubbed_circuit.evaluate(eval_settings)
+
+    if save_name:
+        meta = {
+            "save_name": save_name,
+            "seed": SEED,
+            "samples": samples,
+            "timestamp": datetime.now(pytz.timezone("America/Los_Angeles")),
+            "attns": get_attns,
+        }
+        with open(os.path.join(RESULTS_PATH, f"{save_name}.pkl"), "wb") as f:
+            pickle.dump((res, inp_ixes, meta), f)
+    print(exp_name.upper())
+
     if verbose == 2:
         if tokenizer is not None:
             pprint(tokenizer.batch_decode(inps))
@@ -63,29 +103,19 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0):
     if verbose:
         print("Building induction candidates masks")
 
-    if save_name:
-        meta = {
-            "save_name": save_name,
-            "seed": SEED,
-            "samples": samples,
-            "timestamp": datetime.now(pytz.timezone("America/Los_Angeles")),
-        }
-        with open(os.path.join(RESULTS_PATH, f"{save_name}.pkl"), "wb") as f:
-            pickle.dump((res, inp_ixes, meta), f)
-    print(exp_name.upper())
+    if not get_attns:
+        evals = [
+            ("OVERALL", torch.ones_like(res, dtype=torch.bool)),
+            ("CANDIDATES", all_masks["induction_candidates"]),
+            ("LATER CANDIDATES", all_masks["repeat_candidates"]),
+            ("REPEATS", all_masks["repeats"]),
+            ("UNCOMMON REPEATS", all_masks["uncommon_repeats"]),
+            ("NON-ERB UNCOMMON REPEATS", all_masks["nerb_uncommon_repeats"]),
+            ("MISLEADING INDUCTION", all_masks["misleading_induction"]),
+        ]
+        for eval_name, mask in evals:
+            print(eval_name)
+            masked_res = res[mask]
+            print(f"{masked_res.mean().item():>10.3f}{masked_res.var().item():>10.3f}{masked_res.shape[0]:>10}")
 
-    evals = [
-        ("OVERALL", torch.ones_like(res, dtype=torch.bool)),
-        ("CANDIDATES", all_masks["induction_candidates"]),
-        ("LATER CANDIDATES", all_masks["repeat_candidates"]),
-        ("REPEATS", all_masks["repeats"]),
-        ("UNCOMMON REPEATS", all_masks["uncommon_repeats"]),
-        ("NON-ERB UNCOMMON REPEATS", all_masks["nerb_uncommon_repeats"]),
-        ("MISLEADING INDUCTION", all_masks["misleading_induction"]),
-    ]
-    for eval_name, mask in evals:
-        print(eval_name)
-        masked_res = res[mask]
-        print(f"{masked_res.mean().item():>10.3f}{masked_res.var().item():>10.3f}{masked_res.shape[0]:>10}")
-
-    return res, scrubbed_circuit, inps
+        return res, scrubbed_circuit, inps
