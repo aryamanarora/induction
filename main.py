@@ -38,8 +38,6 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
     corr, options, _ = exps[exp_name]
     options = options or {}
     model, _, tokenizer, toks = construct_circuit(**options)
-    if get_attns:
-        model = rc.substitute_all_modules(model)
 
     if verbose:
         print("Running hypothesis")
@@ -57,26 +55,35 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
     if verbose:
         scrubbed_circuit.print()
 
+    # either get attention probs or losses
     if get_attns:
+        # first sample (for computability), then substitute to subtrees are computable
         sampler = eval_settings.get_sampler(len(scrubbed_circuit.ref_ds), scrubbed_circuit.group)
+        circ = rc.substitute_all_modules(sampler.sample(scrubbed_circuit.circuit))
+
+        # collect attn scores for each head
         res = []
         for l in range(2):
             for h in range(8):
-                circ = (
-                    scrubbed_circuit.circuit.get_unique(
-                        rc.IterativeMatcher(f"b{l}.a.head{h}").chain(rc.restrict("a.attn_probs", end_depth=3))
+                c = list(
+                    circ.get(
+                        rc.IterativeMatcher(f"b{l}.a.head{h}_sample").chain(rc.restrict("a.attn_probs", end_depth=3))
                     )
                     if l == 1
-                    else scrubbed_circuit.circuit.get_unique(
-                        rc.IterativeMatcher("b1.a.head0")
-                        .chain(f"b{l}.a.head{h}")
+                    else circ.get(
+                        rc.IterativeMatcher("b1.a.head0_sample")
+                        .chain(f"b{l}.a.head{h}_sample")
                         .chain(rc.restrict("a.attn_probs", end_depth=3))
                     )
-                )
-                attn = sampler.sample(circ).evaluate().cpu()
+                )[0]
+                attn = c.evaluate().cpu()
+
+                # reshape to be batchable by cat
                 if len(attn.shape) == 3:
                     attn = attn.reshape(attn.shape[0], 1, attn.shape[1], attn.shape[2])
                 res.append(attn)
+
+        # batch together head attns
         res = torch.cat(tuple(res), dim=1).mean(dim=0).unsqueeze(dim=0)
     else:
         res = scrubbed_circuit.evaluate(eval_settings)
