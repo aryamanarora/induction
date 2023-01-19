@@ -171,7 +171,7 @@ def compare_attns_in_cui(exps):
                 attns,
                 dim_names=["comparison", "heads", "q", "k"],
                 dim_types=["example", "heads", "seq", "seq"],
-                dim_idx_names=[comparison_names, [f"a{i}" for i in range(16)], b, b],
+                dim_idx_names=[comparison_names, [f"a{i // 8}.{i % 8}" for i in range(16)], b, b],
                 title=f"Example {common_ixes[i]}",
             )
         )
