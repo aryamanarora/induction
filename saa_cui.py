@@ -32,9 +32,9 @@ RESULTS_PATH = "results"
 # unscrubbed to ev, and the loss increase from ev to eq:
 
 comparisons = [
-    ("unscrubbed", "1.5"),
-    ("unscrubbed", "1.0"),
-    ("unscrubbed", "1.6"),
+    ("unscrubbed", "eq"),
+    ("unscrubbed", "ev"),
+    ("ev", "eq"),
 ]
 
 # Now we can open CUI. At the top, you should be able to choose any dataset
