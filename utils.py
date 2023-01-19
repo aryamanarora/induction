@@ -91,6 +91,10 @@ def load_good_induction_candidates():
     )
 
 
+def tok_stdize_simple_strip(all_tok_strs, tok_ix):
+    return all_tok_strs[tok_ix].upper().strip(" ()[]{},.:;-_\"")
+
+
 def decode_and_highlight(seq_to_decode, highlight_mask):
     tokenizer = load_tokenizer()
     res = []
