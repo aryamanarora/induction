@@ -27,7 +27,7 @@ def get_inputs_from_model(model: rc.Circuit):
 
 
 @torch.inference_mode()
-def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_attns=True):
+def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_attns=False):
     """Run a scrubbing experiments.
     Inputs:
     - exps: A dictionary of experiment names mapped to correspondences and options.
