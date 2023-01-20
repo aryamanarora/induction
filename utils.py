@@ -91,6 +91,10 @@ def load_good_induction_candidates():
     )
 
 
+def tok_stdize_simple_strip(all_tok_strs, tok_ix):
+    return all_tok_strs[tok_ix].upper().strip(' ()[]{},.:;-_"')
+
+
 def decode_and_highlight(seq_to_decode, highlight_mask):
     tokenizer = load_tokenizer()
     res = []
@@ -126,7 +130,7 @@ def get_diff_mean_per_tok_loss(exp1, exp2, inp_ix):
     with open(f"{RESULTS_PATH}/{exp2}_saa_{inp_ix}.pkl", "rb") as f:
         res2, _, _ = pickle.load(f)
     return torch.cat(
-        (torch.zeros((1, 1)), (res2.mean(dim=0, keepdim=True) - res1.mean(dim=0, keepdim=True)).cpu()), dim=1
+        (torch.zeros((1, 1)), (res2.mean(dim=0, keepdim=True).cpu() - res1.mean(dim=0, keepdim=True).cpu())), dim=1
     )
 
 
@@ -144,7 +148,12 @@ def await_without_await(func: Callable[[], Any]):
         pass
 
 
-def compare_attns_in_cui(exps, t: str):
+def compare_attns_in_cui(exps, file: str, ix_filter=None):
+    """Load attentions into cui.
+    - exps: list of tuples or strings, which are the experiments/comparisons to check
+    - file: "attns" or "attn_probs" depending on what you want to see
+    - ix_filter: indices to check if not all of them
+    """
     inps = load_inputs()[:, :-1]
     tokenizer = load_tokenizer()
     exps_unwrapped = []
@@ -154,7 +163,7 @@ def compare_attns_in_cui(exps, t: str):
         else:
             exps_unwrapped.append(i)
 
-    common_ixes = list(get_common_saa_ixes({exp for exp in exps_unwrapped}, type=t))
+    common_ixes = list(get_common_saa_ixes({exp for exp in exps_unwrapped}, ix_filter=ix_filter, type=file))
     all_attns = []
     print(exps)
     for ix in common_ixes:
