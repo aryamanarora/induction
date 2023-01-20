@@ -4,7 +4,7 @@
 
 import pickle
 import os.path
-from utils import compare_saa_in_cui
+from utils import compare_saa_in_cui, compare_attns_in_cui
 from masks import get_all_masks
 
 DATA_PATH = "data"
@@ -32,9 +32,14 @@ RESULTS_PATH = "results"
 # unscrubbed to ev, and the loss increase from ev to eq:
 
 comparisons = [
-    ("unscrubbed", "1.5"),
-    ("unscrubbed", "1.0"),
-    ("unscrubbed", "1.6"),
+    # "unscrubbed",
+    # "k-1.5-0.123457e",
+    # "k-1.5-0.123457",
+    ("unscrubbed", "k-1.5-0.0"),
+    ("unscrubbed", "k-1.5-0.06"),
+    ("unscrubbed", "k-1.5-0.123457e"),
+    ("k-1.5-0.0", "k-1.5-0.123457e"),
+    ("k-1.5-0.06", "k-1.5-0.123457e"),
 ]
 
 # Now we can open CUI. At the top, you should be able to choose any dataset

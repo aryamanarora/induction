@@ -27,7 +27,7 @@ def get_inputs_from_model(model: rc.Circuit):
 
 
 @torch.inference_mode()
-def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_attns=True):
+def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_attns=False, get_attn_scores=False):
     """Run a scrubbing experiments.
     Inputs:
     - exps: A dictionary of experiment names mapped to correspondences and options.
@@ -56,8 +56,9 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
         scrubbed_circuit.print()
 
     # either get attention probs or losses
-    if get_attns:
+    if get_attns or get_attn_scores:
         # first sample (for computability), then substitute to subtrees are computable
+        check = "a.attn_probs" if get_attns else "a.attn_scores"
         sampler = eval_settings.get_sampler(len(scrubbed_circuit.ref_ds), scrubbed_circuit.group)
         circ = rc.substitute_all_modules(sampler.sample(scrubbed_circuit.circuit))
 
@@ -66,14 +67,12 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
         for l in range(2):
             for h in range(8):
                 c = list(
-                    circ.get(
-                        rc.IterativeMatcher(f"b{l}.a.head{h}_sample").chain(rc.restrict("a.attn_probs", end_depth=3))
-                    )
+                    circ.get(rc.IterativeMatcher(f"b{l}.a.head{h}_sample").chain(rc.restrict(check, end_depth=4)))
                     if l == 1
                     else circ.get(
                         rc.IterativeMatcher("b1.a.head0_sample")
                         .chain(f"b{l}.a.head{h}_sample")
-                        .chain(rc.restrict("a.attn_probs", end_depth=3))
+                        .chain(rc.restrict(check, end_depth=4))
                     )
                 )[0]
                 attn = c.evaluate().cpu()
@@ -110,7 +109,7 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
     if verbose:
         print("Building induction candidates masks")
 
-    if not get_attns:
+    if not get_attns and not get_attn_scores:
         evals = [
             ("OVERALL", torch.ones_like(res, dtype=torch.bool)),
             ("CANDIDATES", all_masks["induction_candidates"]),

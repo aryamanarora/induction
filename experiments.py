@@ -94,6 +94,7 @@ def make_experiments(
             res[f"{ch}-1.{i}-0.1235e"] = make_corr_a([ch_matcher.chain(m(1, 2, 3, 5) | embeds)])
             res[f"{ch}-1.{i}-0.123457"] = make_corr_a([ch_matcher.chain(m(1, 2, 3, 4, 5, 7))])
             res[f"{ch}-1.{i}-0.123457e"] = make_corr_a([ch_matcher.chain(m(1, 2, 3, 4, 5, 7) | embeds)])
+            res[f"{ch}-1.{i}-0.1234567e"] = make_corr_a([ch_matcher.chain(m(1, 2, 3, 4, 5, 6, 7) | embeds)])
             res[f"{ch}-1.{i}-0"] = make_corr_a([ch_matcher.chain(m(0, 1, 2, 3, 4, 5, 6, 7))])
 
     # tranpose
@@ -211,7 +212,21 @@ def make_experiments(
     res["pth-q"] = make_corr([q.chain(embeds | rc.Regex(r"\.*not_prev\.*"))])
 
     # ALL (3 og scrubbing)
-    res["all"] = make_corr([ev, eq, pth_k])
+    res["all"] = make_corr([ev | eq | pth_k])
+    ind16 = rc.IterativeMatcher(f"b1.a.head6").chain(rc.restrict("a.head.on_inp", term_if_matches=True))
+    res["all-1.6"] = make_corr_a(
+        [
+            ind16.children_matcher({3}).chain("b0.a")
+            | ind16.children_matcher({1}).chain("b0.a")
+            | ind16.children_matcher({2}).chain(embeds | m(1, 2, 3, 4, 5, 6, 7)),
+        ]
+    )
+    res["all-1.6-ind"] = make_corr_a(
+        [ind16.children_matcher({3}).chain(m(i)) for i in range(8)]
+        + [ind16.children_matcher({1}).chain(m(i)) for i in [0, 1, 2, 3, 4, 5, 7]]
+        + [ind16.children_matcher({2}).chain(embeds)]
+        + [ind16.children_matcher({2}).chain(m(i)) for i in [1, 2, 3, 4, 5, 7]]
+    )
 
     return res
 
@@ -230,6 +245,7 @@ def main():
     parser.add_argument("--samples", action="store", dest="samples", type=int, default=10000)
     parser.add_argument("--verbose", action="store", dest="verbose", type=int, default=0)
     parser.add_argument("--attns", action="store_true", dest="attns")
+    parser.add_argument("--attn-scores", action="store_true", dest="attn_scores")
     parser.add_argument("--save", action="store_true", dest="save")
     parser.add_argument(
         "--idx",
@@ -253,7 +269,7 @@ def main():
             else:
                 save_name += f"_saa_{args.idx}"
 
-    run_experiment(experiments, args.exp_name, args.samples, save_name, args.verbose, args.attns)
+    run_experiment(experiments, args.exp_name, args.samples, save_name, args.verbose, args.attns, args.attn_scores)
     torch.cuda.empty_cache()
 
 

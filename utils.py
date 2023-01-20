@@ -144,7 +144,7 @@ def await_without_await(func: Callable[[], Any]):
         pass
 
 
-def compare_attns_in_cui(exps):
+def compare_attns_in_cui(exps, t: str):
     inps = load_inputs()[:, :-1]
     tokenizer = load_tokenizer()
     exps_unwrapped = []
@@ -154,7 +154,7 @@ def compare_attns_in_cui(exps):
         else:
             exps_unwrapped.append(i)
 
-    common_ixes = list(get_common_saa_ixes({exp for exp in exps_unwrapped}, type="attns"))
+    common_ixes = list(get_common_saa_ixes({exp for exp in exps_unwrapped}, type=t))
     all_attns = []
     print(exps)
     for ix in common_ixes:
@@ -166,11 +166,11 @@ def compare_attns_in_cui(exps):
                     res1, _, _ = pickle.load(f)  # res1 shape is [batch, heads, q, k]
                 with open(f"{RESULTS_PATH}/{exp[1]}_attns_{ix}.pkl", "rb") as f:
                     res2, _, _ = pickle.load(f)  # res1 shape is [batch, heads, q, k]
-                all_attns_idx.append(res1 - res2)
+                all_attns_idx.append(res1.tril() - res2.tril())
             else:
                 with open(f"{RESULTS_PATH}/{exp}_attns_{ix}.pkl", "rb") as f:
                     res1, _, _ = pickle.load(f)  # res1 shape is [batch, heads, q, k]
-                    all_attns_idx.append(res1)
+                    all_attns_idx.append(res1.tril())
         all_attns.append(torch.cat(all_attns_idx, dim=0))
 
     comparison_names = [f"Attention in {exp}" for exp in exps]
