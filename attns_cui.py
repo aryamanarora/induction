@@ -11,15 +11,7 @@ DATA_PATH = "data"
 RESULTS_PATH = "results"
 
 compare_attns_in_cui(
-    [
-        "unscrubbed",
-        "k-1.5-0.06",
-        "k-1.5-0.123457e",
-        "k-1.5-0.123457",
-        ("unscrubbed", "k-1.5-0.06"),
-        ("unscrubbed", "k-1.5-0.123457e"),
-        ("unscrubbed", "k-1.5-0.123457"),
-    ],
+    ["unscrubbed", "k-1.5-0.0", "k-1.5-0.6", "k-1.5-0.123457e", "k-1.5-emb"],
     "attns",
 )
 # %%

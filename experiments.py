@@ -82,6 +82,8 @@ def make_experiments(
     # head-k-child head
     for i in range(8):
         matcher = rc.IterativeMatcher(f"b1.a.head{i}").chain(rc.restrict("a.head.on_inp", term_if_matches=True))
+        res[f"all-1.{i}"] = make_corr_a([matcher])
+        res[f"all-0.{i}"] = make_corr_a([m(i)])
         for ch, id in [("q", 1), ("k", 2), ("v", 3)]:
             ch_matcher = matcher.children_matcher({id})
             res[f"{ch}-1.{i}"] = make_corr_a([ch_matcher])
@@ -91,6 +93,7 @@ def make_experiments(
                 res[f"{ch}-1.{i}-0.{j}e"] = make_corr_a([ch_matcher.chain(m(j) | embeds)])
             res[f"{ch}-1.{i}-0.06"] = make_corr_a([ch_matcher.chain(m(0, 6))])
             res[f"{ch}-1.{i}-0.47"] = make_corr_a([ch_matcher.chain(m(4, 7))])
+            res[f"{ch}-1.{i}-0.1235"] = make_corr_a([ch_matcher.chain(m(1, 2, 3, 5))])
             res[f"{ch}-1.{i}-0.1235e"] = make_corr_a([ch_matcher.chain(m(1, 2, 3, 5) | embeds)])
             res[f"{ch}-1.{i}-0.123457"] = make_corr_a([ch_matcher.chain(m(1, 2, 3, 4, 5, 7))])
             res[f"{ch}-1.{i}-0.123457e"] = make_corr_a([ch_matcher.chain(m(1, 2, 3, 4, 5, 7) | embeds)])
