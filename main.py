@@ -3,6 +3,7 @@ import pickle
 import os.path
 from pprint import pprint
 from datetime import datetime
+import csv
 
 import torch
 
@@ -87,12 +88,13 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
     else:
         res = scrubbed_circuit.evaluate(eval_settings)
 
+    timestamp = datetime.now(pytz.timezone("America/Los_Angeles"))
     if save_name:
         meta = {
             "save_name": save_name,
             "seed": SEED,
             "samples": samples,
-            "timestamp": datetime.now(pytz.timezone("America/Los_Angeles")),
+            "timestamp": timestamp,
             "attns": get_attns,
         }
         with open(os.path.join(RESULTS_PATH, f"{save_name}.pkl"), "wb") as f:
@@ -110,6 +112,8 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
         print("Building induction candidates masks")
 
     if not get_attns and not get_attn_scores:
+        # calculated masked losses
+        eval_scores = []
         evals = [
             ("OVERALL", torch.ones_like(res, dtype=torch.bool)),
             ("CANDIDATES", all_masks["induction_candidates"]),
@@ -122,6 +126,15 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
         for eval_name, mask in evals:
             print(eval_name)
             masked_res = res[mask]
-            print(f"{masked_res.mean().item():>10.3f}{masked_res.var().item():>10.3f}{masked_res.shape[0]:>10}")
+            mean = masked_res.mean().item()
+            var = masked_res.var().item()
+            shape = masked_res.shape[0]
+            eval_scores.extend([mean, var, shape])
+            print(f"{mean:>10.3f}{var:>10.3f}{shape:>10}")
+
+        # log the losses
+        with open("logs.csv", "a") as f:
+            writer = csv.writer(f)
+            writer.writerow([exp_name, SEED, samples, timestamp] + eval_scores)
 
     return res, scrubbed_circuit, inps

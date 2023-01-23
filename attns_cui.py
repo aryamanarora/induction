@@ -11,7 +11,7 @@ DATA_PATH = "data"
 RESULTS_PATH = "results"
 
 compare_attns_in_cui(
-    ["real-0.0"],
+    ["unscrubbed"],
     "attns",
 )
 # %%
