@@ -35,9 +35,7 @@ comparisons = [
     # "unscrubbed",
     # "k-1.5-0.123457e",
     # "k-1.5-0.123457",
-    ("unscrubbed", "eq"),
-    ("unscrubbed", "ev"),
-    ("ev", "eq"),
+    ("unscrubbed", "real-0.0")
 ]
 
 # Now we can open CUI. At the top, you should be able to choose any dataset

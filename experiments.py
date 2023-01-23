@@ -216,20 +216,23 @@ def make_experiments(
 
     # ALL (3 og scrubbing)
     res["all"] = make_corr([ev | eq | pth_k])
-    ind16 = rc.IterativeMatcher(f"b1.a.head6").chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-    res["all-1.6"] = make_corr_a(
-        [
-            ind16.children_matcher({3}).chain("b0.a")
-            | ind16.children_matcher({1}).chain("b0.a")
-            | ind16.children_matcher({2}).chain(embeds | m(1, 2, 3, 4, 5, 6, 7)),
-        ]
-    )
-    res["all-1.6-ind"] = make_corr_a(
-        [ind16.children_matcher({3}).chain(m(i)) for i in range(8)]
-        + [ind16.children_matcher({1}).chain(m(i)) for i in [0, 1, 2, 3, 4, 5, 7]]
-        + [ind16.children_matcher({2}).chain(embeds)]
-        + [ind16.children_matcher({2}).chain(m(i)) for i in [1, 2, 3, 4, 5, 7]]
-    )
+    for h in [5, 6]:
+        ind_head = rc.IterativeMatcher(f"b1.a.head{h}").chain(rc.restrict("a.head.on_inp", term_if_matches=True))
+        res["all-1.6"] = make_corr_a(
+            [
+                ind_head.children_matcher({3}).chain("b0.a")
+                | ind_head.children_matcher({1}).chain("b0.a")
+                | ind_head.children_matcher({2}).chain(embeds | m(1, 2, 3, 4, 5, 6, 7)),
+            ]
+        )
+        res["all-1.6-ind"] = make_corr_a(
+            [ind_head.children_matcher({3}).chain(m(i)) for i in range(8)]
+            + [ind_head.children_matcher({1}).chain(m(i)) for i in [0, 1, 2, 3, 4, 5, 7]]
+            + [ind_head.children_matcher({2}).chain(embeds)]
+            + [ind_head.children_matcher({2}).chain(m(i)) for i in [1, 2, 3, 4, 5, 7]]
+        )
+
+    res["real-0.0"] = make_corr(options={"true_prev": True})
 
     return res
 

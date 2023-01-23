@@ -58,10 +58,11 @@ def load_model_and_data():
 def construct_circuit(
     split_heads: str = "labelled",
     split_pth_ov_by_pt_or_not: bool = False,
+    true_prev: bool = False,
     transpose_head=None,
     swap_q: Optional[tuple[tuple[int, int], tuple[int, int]]] = None,
     swap_k: Optional[tuple[tuple[int, int], tuple[int, int]]] = None,
-    flip: Optional[tuple[int, int]] = None
+    flip: Optional[tuple[int, int]] = None,
 ):
     """Load the 2L attn-only model and make circuit that calculates loss on the dataset, with empty inputs"""
 
@@ -95,6 +96,8 @@ def construct_circuit(
     )
 
     # split by heads
+    if true_prev:
+        split_heads = "all"
     assert split_heads in list(split_head_configs.keys())
     split_head_config = split_head_configs[split_heads]
 
@@ -130,13 +133,26 @@ def construct_circuit(
             lambda circ: rc.Einsum.from_einsum_string("rqk -> rkq" if len(circ.shape) == 3 else "qk -> kq", circ),
         )
 
+    prev = ((torch.arange(seq_len)[:, None] - 1) == torch.arange(seq_len)[None, :]).to(tok_embeds.cast_array().value)
+    prev[0, 0] = 1.0
+
+    if true_prev:
+        prev_mask = rc.Array(
+            prev,
+            "a.attn_probs",
+        )
+        model = model.update(
+            rc.IterativeMatcher("b0.a.head0").chain("a.comb_v").chain("a.attn_probs"),
+            lambda c: prev_mask,
+        )
+
     # scrub the ov by previous tokens or not
     if split_pth_ov_by_pt_or_not:
         k = rc.IterativeMatcher("a1.ind")
 
         # set up prev and not prev masks, will split v between these
         prev_mask = rc.Array(
-            ((torch.arange(seq_len)[:, None] - 1) == torch.arange(seq_len)[None, :]).to(tok_embeds.cast_array().value),
+            prev,
             "a.prev_tok_mask",
         )
         not_prev_mask = rc.Array(
