@@ -99,6 +99,8 @@ def make_experiments(
             res[f"{ch}-1.{i}-0.123457e"] = make_corr_a([ch_matcher.chain(m(1, 2, 3, 4, 5, 7) | embeds)])
             res[f"{ch}-1.{i}-0.1234567e"] = make_corr_a([ch_matcher.chain(m(1, 2, 3, 4, 5, 6, 7) | embeds)])
             res[f"{ch}-1.{i}-0"] = make_corr_a([ch_matcher.chain(m(0, 1, 2, 3, 4, 5, 6, 7))])
+        for j in range(8):
+            res[f"1.{i}-0.{j}"] = make_corr_a([matcher.chain(m(j))])
 
     # tranpose
     res["a1-ind-transpose"] = make_corr(options={"transpose_head": "a1.ind"})
@@ -126,6 +128,7 @@ def make_experiments(
     )
     for i in range(8):
         res[f"0.{i}"] = make_corr_a([m(i)])
+        res[f"0.{i}-decoherent"] = make_corr_a([rc.IterativeMatcher(f"b1.a.head{j}").chain(m(i)) for j in range(8)])
         res[f"1-0.{i}"] = make_corr_a([rc.IterativeMatcher("b1.a").chain(m(i))])
         res[f"resid-0.{i}"] = make_corr_a([rc.IterativeMatcher(rc.restrict(m(i), term_early_at="b1.a"))])
         res[f"1.{i}"] = make_corr_a([rc.IterativeMatcher(f"b1.a.head{i}")])
@@ -232,7 +235,40 @@ def make_experiments(
             + [ind_head.children_matcher({2}).chain(m(i)) for i in [1, 2, 3, 4, 5, 7]]
         )
 
-    res["real-0.0"] = make_corr(options={"true_prev": True})
+    res["real-0.0"] = make_corr(options={"make_pth_true_prev": [0, 1, 2, 3, 4, 5, 6, 7]})
+    res["beg-0.0"] = make_corr(options={"make_pth_beg_attend":  [0, 1, 2, 3, 4, 5, 6, 7]})
+    res["zero-0.0"] = make_corr(options={"make_pth_zero":  [0, 1, 2, 3, 4, 5, 6, 7]})
+    for ch, id in [("q", 1), ("k", 2), ("v", 3)]:
+        res[f"{ch}-real-0.0"] = make_corr(options={
+            "make_pth_true_prev": [0, 1, 2, 3, 4, 5, 6, 7],
+            "pth_modify_only_children": [id],
+        })
+        res[f"{ch}-beg-0.0"] = make_corr(options={
+            "make_pth_beg_attend":  [0, 1, 2, 3, 4, 5, 6, 7],
+            "pth_modify_only_children": [id],
+        })
+        res[f"{ch}-zero-0.0"] = make_corr(options={
+            "make_pth_zero":  [0, 1, 2, 3, 4, 5, 6, 7],
+            "pth_modify_only_children": [id],
+        })
+    for i in range(8):
+        res[f"1.{i}-real-0.0"] = make_corr(options={"make_pth_true_prev": [i]})
+        res[f"1.{i}-beg-0.0"] = make_corr(options={"make_pth_beg_attend": [i]})
+        res[f"1.{i}-zero-0.0"] = make_corr(options={"make_pth_zero": [i]})
+        for ch, id in [("q", 1), ("k", 2), ("v", 3)]:
+            res[f"{ch}-1.{i}-real-0.0"] = make_corr(options={
+                "make_pth_true_prev": [i],
+                "pth_modify_only_children": [id],
+            })
+            res[f"{ch}-1.{i}-beg-0.0"] = make_corr(options={
+                "make_pth_beg_attend": [i],
+                "pth_modify_only_children": [id],
+            })
+            res[f"{ch}-1.{i}-zero-0.0"] = make_corr(options={
+                "make_pth_zero": [i],
+                "pth_modify_only_children": [id],
+            })
+
 
     return res
 
