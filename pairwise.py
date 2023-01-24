@@ -10,6 +10,9 @@ from main import run_experiment
 from typing import Optional
 from tqdm import tqdm
 
+plt.rcParams["figure.dpi"] = 500
+plt.rcParams["savefig.dpi"] = 500
+
 
 def run_pairs(
     experiments: dict[str, tuple],
@@ -18,7 +21,9 @@ def run_pairs(
     layer2: int,
     samples: int = 500,
     repeat: bool = True,
-    l: Optional[list] = None,
+    heads1: list = list(range(8)),
+    heads2: Optional[list] = None,
+    histogram: bool = False,
 ):
     """Run experiments which involve two heads, either in composition or swapping or something more complex.
     Inputs:
@@ -32,39 +37,40 @@ def run_pairs(
     comp = {}
 
     # labels/experiment names for layer2 (include scrub of embed/all if possible)
-    if l is None:
-        l = [f"-{layer2}.{i}" for i in range(8)]
+    if heads2 is None:
+        heads2 = [f"-{layer2}.{i}" for i in range(8)]
         if f"{exp}-{layer1}.0-emb" in experiments:
-            l.append("-emb")
+            heads2.append("-emb")
         if f"{exp}-{layer1}.0" in experiments:
-            l.append("")
-    print(l)
+            heads2.append("")
+    print(heads2)
 
     pca = PCA(n_components=2)
     loss_vectors = [run_experiment(experiments, "unscrubbed", samples)[0].reshape(-1).cpu().numpy()]
 
     # run experiments
     exps: list[tuple[str, int]] = [("unscrubbed", 0)]
-    for h in range(8):
-        for i in tqdm(range((h + 1) if not repeat else 0, len(l))):
-            name = f"{layer1}.{h}{l[i]}"
+    for h in heads1:
+        for i in tqdm(range((h + 1) if not repeat else 0, len(heads2))):
+            name = f"{layer1}.{h}{heads2[i]}"
             exps.append((name, h))
             res, _, _ = run_experiment(experiments, exp + "-" + name, samples)
             torch.cuda.empty_cache()
             loss = res.mean().item()
             loss_vectors.append(res.reshape(-1).cpu().numpy())
-            comp[(h, i)] = (4.631 - loss) / (4.631 - 4.2)
+            comp[(h, i)] = loss
             print(h, i, comp[(h, i)])
 
     # histogram
-    fig, axs = plt.subplots(4, 2)
-    for i in range(1, len(loss_vectors)):
-        axs[(i - 1) // 2][(i - 1) % 2].hist(
-            loss_vectors[i] - loss_vectors[0], label=exps[i][0], bins=100, range=(-7.5, 12.5)
-        )
-        axs[(i - 1) // 2][(i - 1) % 2].set_yscale("log")
-    plt.show()
-    plt.clf()
+    if histogram:
+        fig, axs = plt.subplots(4, 2)
+        for i in range(1, len(loss_vectors)):
+            axs[(i - 1) // 2][(i - 1) % 2].hist(
+                loss_vectors[i] - loss_vectors[0], label=exps[i][0], bins=100, range=(-7.5, 12.5)
+            )
+            axs[(i - 1) // 2][(i - 1) % 2].set_yscale("log")
+        plt.show()
+        plt.clf()
 
     # pca
     compressed = pca.fit_transform(np.array(loss_vectors))
@@ -75,12 +81,12 @@ def run_pairs(
         texts.append(plt.annotate(exps[i][0], (x, y), alpha=0.5))
     adjust_text(texts, arrowprops=dict(arrowstyle="->", alpha=0.5))
     plt.title(exp)
-    plt.savefig(f"figs/{exp}-pca.png", dpi=400)
+    plt.savefig(f"figs/{exp}-pca.png", dpi=500)
     plt.show()
     plt.clf()
 
     # fill in matrix for plot
-    g = torch.zeros((8, len(l)))
+    g = torch.zeros((8, len(heads2)))
     for x in comp:
         g[x[0]][x[1]] = comp[x]
         if not repeat:
@@ -91,19 +97,24 @@ def run_pairs(
 
     # plot
     plt.imshow(g, vmin=g.min().item(), vmax=g.max().item(), cmap="RdBu")
+    for i in range(g.shape[0]):
+        for j in range(g.shape[1]):
+            plt.text(i, j, f"{g[i][j]:.3f}")
     plt.title(exp)
     plt.ylabel(f"Layer {layer1}")
     plt.xlabel(f"Layer {layer2}")
     plt.yticks(list(range(8)), labels=[f"{layer1}.{x}" for x in range(8)])
-    plt.xticks(list(range(len(l))), labels=[x[1:] for x in l])
+    plt.xticks(list(range(len(heads2))), labels=[x[1:] for x in heads2])
     plt.show()
 
 
 def main():
     experiments = make_experiments()
-    # l = [f"-0.{i}" for i in range(8)] + ["", "-emb", "-0.06", "-0.1235", "-0.47", "-0"]
-    l = [""]
-    run_pairs(experiments, "all", 1, 1, l=l)
+    l = [f"-0.{i}" for i in range(8)] + ["", "-emb", "-0"]
+    for c in ["q", "k", "v"]:
+        run_pairs(experiments, c, 1, 0, heads1=[0, 1, 2, 3, 4, 7], heads2=l)
+    # l = [""]
+    # run_pairs(experiments, "all", 1, 1, heads2=l)
 
 
 if __name__ == "__main__":
