@@ -58,11 +58,14 @@ def load_model_and_data():
 def construct_circuit(
     split_heads: str = "labelled",
     split_pth_ov_by_pt_or_not: bool = False,
-    true_prev: bool = False,
     transpose_head=None,
     swap_q: Optional[tuple[tuple[int, int], tuple[int, int]]] = None,
     swap_k: Optional[tuple[tuple[int, int], tuple[int, int]]] = None,
     flip: Optional[tuple[int, int]] = None,
+    pth_modify_only_children: list = [1, 2, 3],
+    make_pth_true_prev: list = [],
+    make_pth_beg_attend: list = [],
+    make_pth_zero: list = [],
 ):
     """Load the 2L attn-only model and make circuit that calculates loss on the dataset, with empty inputs"""
 
@@ -96,7 +99,7 @@ def construct_circuit(
     )
 
     # split by heads
-    if true_prev:
+    if make_pth_true_prev or make_pth_beg_attend or make_pth_zero:
         split_heads = "all"
     assert split_heads in list(split_head_configs.keys())
     split_head_config = split_head_configs[split_heads]
@@ -135,16 +138,42 @@ def construct_circuit(
 
     prev = ((torch.arange(seq_len)[:, None] - 1) == torch.arange(seq_len)[None, :]).to(tok_embeds.cast_array().value)
     prev[0, 0] = 1.0
+    prev_mask = rc.Array(
+        prev,
+        "a.attn_probs",
+    )
 
-    if true_prev:
-        prev_mask = rc.Array(
-            prev,
-            "a.attn_probs",
-        )
+    for i in make_pth_true_prev:
+        l1_head_matcher = rc.IterativeMatcher(f"b1.a.head{i}").children_matcher({0})
         model = model.update(
-            rc.IterativeMatcher("b0.a.head0").chain("a.comb_v").chain("a.attn_probs"),
+            l1_head_matcher.children_matcher(set(pth_modify_only_children)).chain("b0.a.head0").chain("a.comb_v").chain("a.attn_probs"),
             lambda c: prev_mask,
         )
+
+    beg = (torch.arange(seq_len)[None, :] == torch.zeros((seq_len, seq_len))).to(tok_embeds.cast_array().value)
+    beg_mask = rc.Array(
+        beg,
+        "a.attn_probs",
+    )
+    for i in make_pth_beg_attend:
+        l1_head_matcher = rc.IterativeMatcher(f"b1.a.head{i}").children_matcher({0})
+        model = model.update(
+            l1_head_matcher.children_matcher(set(pth_modify_only_children)).chain("b0.a.head0").chain("a.comb_v").chain("a.attn_probs"),
+            lambda c: beg_mask,
+        )
+
+    zeros = torch.zeros((seq_len, seq_len)).to(tok_embeds.cast_array().value)
+    zeros_mask = rc.Array(
+        zeros,
+        "a.attn_probs",
+    )
+    for i in make_pth_zero:
+        l1_head_matcher = rc.IterativeMatcher(f"b1.a.head{i}").children_matcher({0})
+        model = model.update(
+            l1_head_matcher.children_matcher(set(pth_modify_only_children)).chain("b0.a.head0").chain("a.comb_v").chain("a.attn_probs"),
+            lambda c: zeros_mask,
+        )
+
 
     # scrub the ov by previous tokens or not
     if split_pth_ov_by_pt_or_not:
