@@ -66,6 +66,7 @@ def construct_circuit(
     make_pth_true_prev: list = [],
     make_pth_beg_attend: list = [],
     make_pth_zero: list = [],
+    actual_beg: int = 0,
 ):
     """Load the 2L attn-only model and make circuit that calculates loss on the dataset, with empty inputs"""
 
@@ -146,11 +147,16 @@ def construct_circuit(
     for i in make_pth_true_prev:
         l1_head_matcher = rc.IterativeMatcher(f"b1.a.head{i}").children_matcher({0})
         model = model.update(
-            l1_head_matcher.children_matcher(set(pth_modify_only_children)).chain("b0.a.head0").chain("a.comb_v").chain("a.attn_probs"),
+            l1_head_matcher.children_matcher(set(pth_modify_only_children))
+            .chain("b0.a.head0")
+            .chain("a.comb_v")
+            .chain("a.attn_probs"),
             lambda c: prev_mask,
         )
 
-    beg = (torch.arange(seq_len)[None, :] == torch.zeros((seq_len, seq_len))).to(tok_embeds.cast_array().value)
+    beg = (torch.arange(seq_len)[None, :] == (torch.zeros((seq_len, seq_len)) + actual_beg)).to(
+        tok_embeds.cast_array().value
+    )
     beg_mask = rc.Array(
         beg,
         "a.attn_probs",
@@ -158,7 +164,10 @@ def construct_circuit(
     for i in make_pth_beg_attend:
         l1_head_matcher = rc.IterativeMatcher(f"b1.a.head{i}").children_matcher({0})
         model = model.update(
-            l1_head_matcher.children_matcher(set(pth_modify_only_children)).chain("b0.a.head0").chain("a.comb_v").chain("a.attn_probs"),
+            l1_head_matcher.children_matcher(set(pth_modify_only_children))
+            .chain("b0.a.head0")
+            .chain("a.comb_v")
+            .chain("a.attn_probs"),
             lambda c: beg_mask,
         )
 
@@ -170,10 +179,12 @@ def construct_circuit(
     for i in make_pth_zero:
         l1_head_matcher = rc.IterativeMatcher(f"b1.a.head{i}").children_matcher({0})
         model = model.update(
-            l1_head_matcher.children_matcher(set(pth_modify_only_children)).chain("b0.a.head0").chain("a.comb_v").chain("a.attn_probs"),
+            l1_head_matcher.children_matcher(set(pth_modify_only_children))
+            .chain("b0.a.head0")
+            .chain("a.comb_v")
+            .chain("a.attn_probs"),
             lambda c: zeros_mask,
         )
-
 
     # scrub the ov by previous tokens or not
     if split_pth_ov_by_pt_or_not:
