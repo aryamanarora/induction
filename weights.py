@@ -6,8 +6,10 @@ from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 from adjustText import adjust_text
 from tqdm import tqdm
+import numpy as np
+from collections import defaultdict
 
-plt.rcParams["figure.dpi"] = 50
+plt.rcParams["figure.dpi"] = 400
 
 DEVICE = "cuda:0"
 
@@ -41,7 +43,7 @@ def print_toks(tensor: torch.Tensor, vals: torch.Tensor):
         print(f"{t:<20}{vals[i].item():<20.3f}")
 
 
-def embed_plot(embed, comp=2, title="sus"):
+def embed_plot(embed, comp=2, title="sus", xy=False):
     """Plot PCA of some embeddings"""
     pca = PCA(n_components=comp)
     compressed = pca.fit_transform(embed.cpu())
@@ -59,9 +61,10 @@ def embed_plot(embed, comp=2, title="sus"):
     plt.show()
     plt.clf()
 
-    for i in range(comp):
-        plt.plot(list(range(len(compressed))), [x[i] for x in compressed])
-    plt.show()
+    if xy:
+        for i in range(comp):
+            plt.plot(list(range(len(compressed))), [x[i] for x in compressed])
+        plt.show()
 
 
 def top_norms(embed: torch.Tensor):
@@ -139,39 +142,147 @@ def plot_layernorm():
 # embed_plot(lnormed_embeds, title="lnormed_embeds")
 
 
-def pairwise_cosine_sim():
+def transform_vocab(layer=0, head=0, type="v", normalise=True, pos=False) -> torch.Tensor:
+    idx = layer * 8 + head
+    a: torch.Tensor
+    if type == "v":
+        a = torch.einsum("ve,ae -> va", pos_embeds if pos else lnormed_embeds, wv[idx])
+        a = torch.einsum("va,ea -> ve", a, wo[idx])
+    elif type == "k":
+        a = torch.einsum("ve,ae -> va", pos_embeds if pos else lnormed_embeds, wk[idx])
+    elif type == "q":
+        a = torch.einsum("ve,ae -> va", pos_embeds if pos else lnormed_embeds, wq[idx])
+    if normalise:
+        a = torch.div(a.t(), torch.norm(a, dim=1)).t()
+    return a
+
+
+def pairwise_cosine_sim(type="v", verbose=False):
     """Plot pairwise cosine similarities between OV matrices of layer 0 heads"""
-    normalised_lnormed = torch.div(lnormed_embeds.t().cpu(), lnormed_norms.cpu()).t().cpu()
-    normalised_embeds = torch.div(tok_embeds.t().cpu(), tok_norms.cpu()).t().cpu()
+    normalised_lnormed = torch.div(lnormed_embeds.t(), lnormed_norms).t()
+    normalised_embeds = torch.div(tok_embeds.t(), tok_norms).t()
 
     g = torch.zeros((9, 9))
 
     for i in range(8):
         # get normed OV projected vectors for this head
-        a = torch.einsum("ve,ae -> va", lnormed_embeds, wv[i].cpu())
-        a = torch.einsum("va,ea -> ve", a, wo[i].cpu())
-        a = torch.div(a.t(), torch.norm(a, dim=1)).t()
+        a = transform_vocab(0, i, type)
+        embed_plot(a, title=f"0.{i} OV")
 
         # compare with all other heads
         for j in range(i + 1, 8):
-            b = torch.einsum("ve,ae -> va", lnormed_embeds, wv[j].cpu())
-            b = torch.einsum("va,ea -> ve", b, wo[j].cpu())
-            b = torch.div(b.t(), torch.norm(b, dim=1)).t()
+            b = transform_vocab(0, j, type)
             sim = torch.einsum("ve,ve -> v", a, b)
-            g[i][j] = sim.mean().item()
-            g[j][i] = g[i][j]
-            print("=" * 10, "\n", i, j, f"{g[i][j]:.3f}")
-            top_norms(sim.reshape(50259, 1))
+            g[i][j] = g[j][i] = sim.mean().item()
+            if verbose:
+                print("=" * 10, "\n", i, j, f"{g[i][j]:.3f}")
+                top_norms(sim.reshape(50259, 1))
 
         # compare w embeds
-        sim = torch.einsum("ve,ve -> v", a, normalised_embeds.cpu())
-        g[i][8] = sim.mean().item()
-        g[8][i] = g[i][8]
-        print("=" * 10, "\n", i, 8, f"{g[i][8]:.3f}")
-        top_norms(sim.reshape(50259, 1))
+        if type == "v":
+            sim = torch.einsum("ve,ve -> v", a, normalised_embeds)
+            g[i][8] = g[8][i] = sim.mean().item()
+            if verbose:
+                print("=" * 10, "\n", i, 8, f"{g[i][8]:.3f}")
+                top_norms(sim.reshape(50259, 1))
 
     plt.imshow(g, vmin=-1, vmax=1, cmap="RdBu")
     plt.show()
 
 
+def kq(count=10):
+    for p in [True, False]:
+        for r in [True, False]:
+            for head in range(8):
+                k = transform_vocab(0, head, "k", normalise=False, pos=p)
+                q = transform_vocab(0, head, "q", normalise=False, pos=r)
+                vocab_k = k.shape[0]
+                vocab_q = q.shape[0]
+                print(head, p, r, vocab_k, vocab_q)
+
+                vals, idxs = [], []
+                for j in tqdm(range(0, vocab_k, 100)):
+                    add = j * vocab_q
+                    sim = torch.einsum("ke,qe -> kq", k[j : j + 100], q)
+                    if p and r:
+                        sim = sim.triu(diagonal=j)
+                    _, i = torch.topk(sim.flatten().abs(), count)
+                    v = sim.flatten()[i]
+                    vals.append(v)
+                    idxs.append((i + add).long())
+
+                vals = torch.cat(vals, dim=0)
+                idxs = torch.cat(idxs, dim=0)
+                print(idxs)
+                tops = torch.sort(vals.abs(), descending=True).indices
+
+                name = ("p" if p else "t") + ("p" if r else "t")
+                with open(f"saved_logs/qk/{name}-0.{head}.txt", "w") as f:
+                    f.write(f"{'query':<20} {'key':<20} {'attn_score':<20}\n")
+                    for j in range(count):
+                        t = tops[j]
+                        a = idxs[t] % vocab_k
+                        b = idxs[t] // vocab_k
+                        f.write(f"{a if p else all_toks[a]:<20} {b if r else all_toks[b]:<20} {vals[t]:<20.5f}\n")
+
+
+def autoencoder():
+    plt.rcParams["figure.figsize"] = (10, 20)
+    fig, axs = plt.subplots(8, 2)
+    for head in range(8):
+        ct_k = 0
+        ct_q = 0
+        avg_k = 0
+        avg_q = 0
+        all_k, all_q = [], []
+        k = transform_vocab(0, head, "k", normalise=False)
+        q = transform_vocab(0, head, "q", normalise=False)
+        vocab_k = k.shape[0]
+        vocab_q = q.shape[0]
+
+        for j in range(0, vocab_k, 100):
+            maxi = min(vocab_k, j + 100)
+            size = maxi - j
+
+            sim = torch.einsum("ke,qe -> kq", k[j:maxi], q)
+            ct_k += (torch.argmax(sim, dim=1) == torch.arange(j, maxi, 1).to(DEVICE)).sum()
+            diag = sim.diagonal(offset=j).reshape(size, 1).expand(size, vocab_q)
+            avg_k += (sim > diag).sum()
+            all_k.extend((sim > diag).sum(dim=1).tolist())
+
+            sim = torch.einsum("ke,qe -> kq", q[j:maxi], k)
+            ct_q += (torch.argmax(sim, dim=1) == torch.arange(j, maxi, 1).to(DEVICE)).sum()
+            diag = sim.diagonal(offset=j).reshape(size, 1).expand(size, vocab_q)
+            avg_q += (sim > diag).sum()
+            all_q.extend((sim > diag).sum(dim=1).tolist())
+
+        axs[head][0].hist(all_k, bins=1000, range=(0, vocab_k))
+        axs[head][0].set_ylabel(f"head 0.{head}")
+        axs[head][1].hist(all_q, bins=1000, range=(0, vocab_k))
+
+        print(
+            head,
+            f"{ct_k / vocab_k:<10.3%} {ct_q / vocab_k:<10.3%} {avg_k / vocab_k:<10.3f} {avg_q / vocab_k:<10.3f}",
+        )
+
+    plt.show()
+
+
+def pqpk():
+    plt.rcParams["figure.figsize"] = (10, 20)
+    fig, axs = plt.subplots(4, 2)
+    for head in range(8):
+        k = transform_vocab(0, head, "k", normalise=False, pos=True)
+        q = transform_vocab(0, head, "q", normalise=False, pos=True)
+        sim = torch.einsum("ke,qe -> kq", k, q).tril()
+        axs[head % 4][head // 4].imshow(sim.cpu(), cmap="RdBu")
+    plt.show()
+
+
+def main():
+    pqpk()
+
+
+if __name__ == "__main__":
+    main()
 # %%

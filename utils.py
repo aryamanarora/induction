@@ -171,13 +171,13 @@ def compare_attns_in_cui(exps, file: str, ix_filter=None):
         for exp in exps:
             print(exp)
             if isinstance(exp, tuple):
-                with open(f"{RESULTS_PATH}/{exp[0]}_attns_{ix}.pkl", "rb") as f:
+                with open(f"{RESULTS_PATH}/{exp[0]}_{file}_{ix}.pkl", "rb") as f:
                     res1, _, _ = pickle.load(f)  # res1 shape is [batch, heads, q, k]
-                with open(f"{RESULTS_PATH}/{exp[1]}_attns_{ix}.pkl", "rb") as f:
+                with open(f"{RESULTS_PATH}/{exp[1]}_{file}_{ix}.pkl", "rb") as f:
                     res2, _, _ = pickle.load(f)  # res1 shape is [batch, heads, q, k]
                 all_attns_idx.append(res1.tril() - res2.tril())
             else:
-                with open(f"{RESULTS_PATH}/{exp}_attns_{ix}.pkl", "rb") as f:
+                with open(f"{RESULTS_PATH}/{exp}_{file}_{ix}.pkl", "rb") as f:
                     res1, _, _ = pickle.load(f)  # res1 shape is [batch, heads, q, k]
                     all_attns_idx.append(res1.tril())
         all_attns.append(torch.cat(all_attns_idx, dim=0))
