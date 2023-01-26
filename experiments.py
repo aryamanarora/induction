@@ -93,11 +93,16 @@ def make_experiments(
                 res[f"{ch}-1.{i}-0.{j}e"] = make_corr_a([ch_matcher.chain(m(j) | embeds)])
             res[f"{ch}-1.{i}-0.06"] = make_corr_a([ch_matcher.chain(m(0, 6))])
             res[f"{ch}-1.{i}-0.47"] = make_corr_a([ch_matcher.chain(m(4, 7))])
+            res[f"{ch}-1.{i}-0.0647"] = make_corr_a([ch_matcher.chain(m(0, 6, 4, 7))])
             res[f"{ch}-1.{i}-0.1235"] = make_corr_a([ch_matcher.chain(m(1, 2, 3, 5))])
             res[f"{ch}-1.{i}-0.1235e"] = make_corr_a([ch_matcher.chain(m(1, 2, 3, 5) | embeds)])
+            res[f"{ch}-1.{i}-0.1235e-split"] = make_corr_a(
+                [ch_matcher.chain(x) for x in [m(1), m(2), m(3), m(5), embeds]]
+            )
             res[f"{ch}-1.{i}-0.123457"] = make_corr_a([ch_matcher.chain(m(1, 2, 3, 4, 5, 7))])
             res[f"{ch}-1.{i}-0.123457e"] = make_corr_a([ch_matcher.chain(m(1, 2, 3, 4, 5, 7) | embeds)])
             res[f"{ch}-1.{i}-0.1234567e"] = make_corr_a([ch_matcher.chain(m(1, 2, 3, 4, 5, 6, 7) | embeds)])
+            res[f"{ch}-1.{i}-0.012356e"] = make_corr_a([ch_matcher.chain(m(0, 1, 2, 3, 5, 6) | embeds)])
             res[f"{ch}-1.{i}-0"] = make_corr_a([ch_matcher.chain(m(0, 1, 2, 3, 4, 5, 6, 7))])
         for j in range(8):
             res[f"1.{i}-0.{j}"] = make_corr_a([matcher.chain(m(j))])

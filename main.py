@@ -40,7 +40,7 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
     options = options or {}
     model, _, tokenizer, toks = construct_circuit(**options)
 
-    if verbose:
+    if verbose > 0:
         print("Running hypothesis")
     ds = Dataset(arrs={"toks_int_var": toks})
     eval_settings = ExperimentEvalSettings(device_dtype=DEVICE, batch_size=100, run_on_all=True)
@@ -53,7 +53,7 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
     all_masks = get_all_masks(inp_ixes)
     inps = inps[:, :-1]
 
-    if verbose:
+    if verbose > 0:
         scrubbed_circuit.print()
 
     # either get attention probs or losses
@@ -99,7 +99,8 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
         }
         with open(os.path.join(RESULTS_PATH, f"{save_name}.pkl"), "wb") as f:
             pickle.dump((res, inp_ixes, meta), f)
-    print(exp_name.upper())
+    if verbose > 0:
+        print(exp_name.upper())
 
     if verbose == 2:
         if tokenizer is not None:
@@ -108,7 +109,7 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
             binps[all_masks["induction_candidates"]] = inps[0][0]
             pprint(tokenizer.batch_decode(binps))
 
-    if verbose:
+    if verbose > 0:
         print("Building induction candidates masks")
 
     if not get_attns and not get_attn_scores:
@@ -124,13 +125,15 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
             ("MISLEADING INDUCTION", all_masks["misleading_induction"]),
         ]
         for eval_name, mask in evals:
-            print(eval_name)
+            if verbose > -1:
+                print(eval_name)
             masked_res = res[mask]
             mean = masked_res.mean().item()
             var = masked_res.var().item()
             shape = masked_res.shape[0]
             eval_scores.extend([mean, var, shape])
-            print(f"{mean:>10.3f}{var:>10.3f}{shape:>10}")
+            if verbose > -1:
+                print(f"{mean:>10.3f}{var:>10.3f}{shape:>10}")
 
         # log the losses
         with open("logs.csv", "a") as f:
