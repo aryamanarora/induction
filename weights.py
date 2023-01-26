@@ -8,6 +8,9 @@ from adjustText import adjust_text
 from tqdm import tqdm
 import numpy as np
 from collections import defaultdict
+from umap import UMAP
+from sklearn.manifold import TSNE
+import plotly.express as px
 
 plt.rcParams["figure.dpi"] = 400
 
@@ -35,6 +38,58 @@ lnormed_embeds = torch.nn.functional.layer_norm(tok_embeds, (tok_embeds.shape[1]
 tok_norms = torch.norm(tok_embeds, dim=1)
 lnormed_norms = torch.norm(lnormed_embeds, dim=1)
 
+categories: list[str] = []
+
+
+def categorise(n):
+    if all_toks[n] in ["[BEGIN]", "[END]", "\n", "<|endoftext|>"]:
+        return all_toks[n]
+    t: str = all_toks[n].strip("_").lower()
+    if len(t) == 0:
+        return "_"
+    if t.isdigit() and len(t) == 4:
+        return "year"
+    if t.isdigit():
+        return "number"
+    elif t in ["i", "he", "you", "she", "they", "we", "my", "her", "his", "me", "them", "him", "us"]:
+        return "pronoun"
+    elif t.endswith("ly"):
+        return "ly-adverb"
+    elif t.endswith("est"):
+        return "superlative"
+    elif t.endswith("ing"):
+        return "gerund"
+    elif t in [
+        "january",
+        "february",
+        "march",
+        "april",
+        "may",
+        "june",
+        "july",
+        "august",
+        "september",
+        "october",
+        "november",
+        "december",
+    ]:
+        return "month"
+    elif t.endswith("day"):
+        return "day"
+    elif all_toks[n].isupper():
+        return "uppercase"
+    elif all_toks[n][0].isupper():
+        return "capital"
+    elif t[0] in ",.():/\\!@#$%^&*[}]{|":
+        return "punctuation"
+    elif t in ["to", "as", "with", "of", "in", "on", "at", "for"]:
+        return "prep"
+    return "other"
+
+
+for i in range(len(all_toks)):
+    categories.append(categorise(i))
+
 
 def print_toks(tensor: torch.Tensor, vals: torch.Tensor):
     """Print a token and some value of it from a vector"""
@@ -43,28 +98,50 @@ def print_toks(tensor: torch.Tensor, vals: torch.Tensor):
         print(f"{t:<20}{vals[i].item():<20.3f}")
 
 
-def embed_plot(embed, comp=2, title="sus", xy=False):
+def embed_plot(embed, comp=2, title="sus", xy=False, uma=False):
     """Plot PCA of some embeddings"""
-    pca = PCA(n_components=comp)
+    if uma:
+        pca = UMAP()
+    else:
+        pca = PCA(n_components=comp)
     compressed = pca.fit_transform(embed.cpu())
-    print(pca.explained_variance_ratio_)
-    print(sum(pca.explained_variance_ratio_))
+    if not uma:
+        print(pca.explained_variance_ratio_)
+        print(sum(pca.explained_variance_ratio_))
     if comp == 2:
-        plt.scatter(
-            [x for (x, y) in compressed],
-            [y for (x, y) in compressed],
-            cmap="RdBu",
-            c=list(range(len(compressed))),
-            alpha=0.5,
+        fig = px.scatter(
+            x=[x for (x, y) in compressed],
+            y=[y for (x, y) in compressed],
+            opacity=0.5,
+            color=categories,
+            hover_name=all_toks,
+            title=title,
         )
-    plt.title(f"{title} ({sum(pca.explained_variance_ratio_):.3f})")
-    plt.show()
-    plt.clf()
+        fig.show()
 
     if xy:
         for i in range(comp):
             plt.plot(list(range(len(compressed))), [x[i] for x in compressed])
         plt.show()
+
+
+def embed_plot_many(*embeds, labels=None, title="sus"):
+    umap = UMAP(n_components=2)
+    compressed = umap.fit_transform(torch.cat(embeds, dim=0).cpu())
+    if labels is None:
+        labels = list(range(len(embeds)))
+    color = []
+    for i, l in enumerate(labels):
+        color.extend([str(l) for _ in range(embeds[i].shape[0])])
+    fig = px.scatter(
+        x=[x for (x, y) in compressed],
+        y=[y for (x, y) in compressed],
+        opacity=0.5,
+        color=color,
+        hover_name=all_toks * len(embeds),
+        title=title,
+    )
+    fig.show()
 
 
 def top_norms(embed: torch.Tensor):
@@ -190,12 +267,15 @@ def pairwise_cosine_sim(type="v", verbose=False):
     plt.show()
 
 
-def kq(count=10):
+def kq(count=10, graph=False):
+    plt.rcParams["figure.figsize"] = (5, 5)
     for p in [True, False]:
         for r in [True, False]:
             for head in range(8):
                 k = transform_vocab(0, head, "k", normalise=False, pos=p)
                 q = transform_vocab(0, head, "q", normalise=False, pos=r)
+                if graph:
+                    embed_plot(k, title=f"0.{head}->k ({'pos' if p else 'embed'})")
                 vocab_k = k.shape[0]
                 vocab_q = q.shape[0]
                 print(head, p, r, vocab_k, vocab_q)
@@ -279,8 +359,22 @@ def pqpk():
     plt.show()
 
 
+def umaps():
+    plt.rcParams["figure.figsize"] = (5, 5)
+    vs = []
+    for head in tqdm(range(8)):
+        # k = transform_vocab(0, head, "k", normalise=False, pos=False)
+        q = transform_vocab(0, head, "q", normalise=False, pos=False)
+        # v = transform_vocab(0, head, "v", normalise=True, pos=False)
+        vs.append(q)
+        # embed_two_plot(k, q, title=f"0.{head}")
+        # embed_plot(v, title=f"0.{head}", uma=True)
+    embed_plot_many(*vs, title="q")
+
+
 def main():
-    pqpk()
+    # embed_plot_many(lnormed_embeds, transform_vocab(0, 0, "v", normalise=True, pos=False), title=f"embeds")
+    umaps()
 
 
 if __name__ == "__main__":

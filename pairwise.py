@@ -10,6 +10,8 @@ from main import run_experiment
 from typing import Optional
 from tqdm import tqdm
 
+from umap import UMAP
+
 plt.rcParams["figure.dpi"] = 500
 plt.rcParams["savefig.dpi"] = 500
 
@@ -19,11 +21,12 @@ def run_pairs(
     exp: str,
     layer1: int,
     layer2: int,
-    samples: int = 500,
+    samples: int = 10000,
     repeat: bool = True,
     heads1: list = list(range(8)),
     heads2: Optional[list] = None,
     histogram: bool = False,
+    use_pca: bool = False,
 ):
     """Run experiments which involve two heads, either in composition or swapping or something more complex.
     Inputs:
@@ -45,21 +48,26 @@ def run_pairs(
             heads2.append("")
     print(heads2)
 
-    pca = PCA(n_components=2)
+    pca = PCA(n_components=2) if use_pca else UMAP()
     loss_vectors = [run_experiment(experiments, "unscrubbed", samples)[0].reshape(-1).cpu().numpy()]
+    unscrubbed = loss_vectors[0].mean().item()
 
     # run experiments
     exps: list[tuple[str, int]] = [("unscrubbed", 0)]
     for h in heads1:
-        for i in tqdm(range((h + 1) if not repeat else 0, len(heads2))):
+        baseline = run_experiment(experiments, f"{exp}-{layer1}.{h}", samples)[0].mean().item()
+        for i in range((h + 1) if not repeat else 0, len(heads2)):
             name = f"{layer1}.{h}{heads2[i]}"
             exps.append((name, h))
-            res, _, _ = run_experiment(experiments, exp + "-" + name, samples)
+            res, _, _ = run_experiment(experiments, exp + "-" + name, samples, verbose=-1)
             torch.cuda.empty_cache()
             loss = res.mean().item()
             loss_vectors.append(res.reshape(-1).cpu().numpy())
             comp[(h, i)] = loss
-            print(h, i, comp[(h, i)])
+            print(
+                f"{exp + '-' + name:<20} {comp[(h, i)]:>10.3f} {(comp[(h, i)] - baseline) / (unscrubbed - baseline):>10.3%}"
+            )
+        print("\n\n")
 
     # histogram
     if histogram:
@@ -99,7 +107,7 @@ def run_pairs(
     plt.imshow(g, vmin=g.min().item(), vmax=g.max().item(), cmap="RdBu")
     for i in range(g.shape[0]):
         for j in range(g.shape[1]):
-            plt.text(i, j, f"{g[i][j]:.3f}")
+            plt.text(j, i, f"{g[i][j]:.2f}")
     plt.title(exp)
     plt.ylabel(f"Layer {layer1}")
     plt.xlabel(f"Layer {layer2}")
@@ -110,9 +118,10 @@ def run_pairs(
 
 def main():
     experiments = make_experiments()
-    l = [f"-0.{i}" for i in range(8)] + ["", "-emb", "-0"]
+    l = [f"-0.{i}" for i in ["06", "47", "1235e", "123457e", "012356e", "0647", "1235"]] + ["-emb", "-0", ""]
     for c in ["q", "k", "v"]:
-        run_pairs(experiments, c, 1, 0, heads1=[0, 1, 2, 3, 4, 7], heads2=l)
+        run_pairs(experiments, c, 1, 0, heads1=[5, 6], heads2=l)
+        # run_pairs(experiments, c, 1, 0, heads2=l)
     # l = [""]
     # run_pairs(experiments, "all", 1, 1, heads2=l)
 
