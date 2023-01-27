@@ -268,6 +268,7 @@ def make_experiments(
         res[f"1.{i}-pos20-0.0"] = make_corr(options={"make_pth_beg_attend": [i], "actual_beg": 20})
         res[f"1.{i}-pos1-0.0"] = make_corr(options={"make_pth_beg_attend": [i], "actual_beg": 1})
         res[f"1.{i}-zero-0.0"] = make_corr(options={"make_pth_zero": [i]})
+        res[f"1.{i}-diag-0.0"] = make_corr(options={"make_pth_diag": [i]})
         for ch, id in [("q", 1), ("k", 2), ("v", 3)]:
             res[f"{ch}-1.{i}-real-0.0"] = make_corr(
                 options={
@@ -284,6 +285,12 @@ def make_experiments(
             res[f"{ch}-1.{i}-zero-0.0"] = make_corr(
                 options={
                     "make_pth_zero": [i],
+                    "pth_modify_only_children": [id],
+                }
+            )
+            res[f"{ch}-1.{i}-diag-0.0"] = make_corr(
+                options={
+                    "make_pth_diag": [i],
                     "pth_modify_only_children": [id],
                 }
             )

@@ -67,6 +67,7 @@ def construct_circuit(
     make_pth_beg_attend: list = [],
     make_pth_zero: list = [],
     actual_beg: int = 0,
+    make_pth_diag: list = [],
 ):
     """Load the 2L attn-only model and make circuit that calculates loss on the dataset, with empty inputs"""
 
@@ -100,7 +101,7 @@ def construct_circuit(
     )
 
     # split by heads
-    if make_pth_true_prev or make_pth_beg_attend or make_pth_zero:
+    if make_pth_true_prev or make_pth_beg_attend or make_pth_zero or make_pth_diag:
         split_heads = "all"
     assert split_heads in list(split_head_configs.keys())
     split_head_config = split_head_configs[split_heads]
@@ -184,6 +185,19 @@ def construct_circuit(
             .chain("a.comb_v")
             .chain("a.attn_probs"),
             lambda c: zeros_mask,
+        )
+
+    diag = ((torch.arange(seq_len)[:, None]) == torch.arange(seq_len)[None, :]).to(tok_embeds.cast_array().value)
+    diag_mask = rc.Array(
+        diag,
+        "a.attn_probs",
+    )
+
+    for i in make_pth_diag:
+        l1_head_matcher = rc.IterativeMatcher(f"b1.a.head{i}").children_matcher({0})
+        model = model.update(
+            l1_head_matcher.children_matcher(set(pth_modify_only_children)).chain("b0.a.head0").chain("a.comb_v").chain("a.attn_probs"),
+            lambda c: diag_mask,
         )
 
     # scrub the ov by previous tokens or not
