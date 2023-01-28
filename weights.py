@@ -36,7 +36,12 @@ ln_bias = loaded["t.bind_w"].get_unique(f"a0.ln.w.bias_arr").value
 ln_scale = loaded["t.bind_w"].get_unique(f"a0.ln.w.scale_arr").value
 lnormed_embeds = torch.nn.functional.layer_norm(tok_embeds, (tok_embeds.shape[1],), ln_scale, ln_bias)
 tok_norms = torch.norm(tok_embeds, dim=1)
+pos_norms = torch.norm(pos_embeds, dim=1)
 lnormed_norms = torch.norm(lnormed_embeds, dim=1)
+
+normalised_lnormed = torch.div(lnormed_embeds.t(), lnormed_norms).t()
+normalised_embeds = torch.div(tok_embeds.t(), tok_norms).t()
+normalised_pos = torch.div(pos_embeds.t(), pos_norms).t()
 
 categories: list[str] = []
 
@@ -125,23 +130,45 @@ def embed_plot(embed, comp=2, title="sus", xy=False, uma=False):
         plt.show()
 
 
-def embed_plot_many(*embeds, labels=None, title="sus"):
+def embed_plot_many(*embeds, labels=None, title="sus", pos=False, save=False):
     umap = UMAP(n_components=2)
     compressed = umap.fit_transform(torch.cat(embeds, dim=0).cpu())
     if labels is None:
         labels = list(range(len(embeds)))
+    c = ["tab:blue", "tab:orange", "tab:green", "tab:red"]
+
     color = []
+    x = [x for (x, y) in compressed]
+    y = [y for (x, y) in compressed]
+
     for i, l in enumerate(labels):
-        color.extend([str(l) for _ in range(embeds[i].shape[0])])
-    fig = px.scatter(
-        x=[x for (x, y) in compressed],
-        y=[y for (x, y) in compressed],
-        opacity=0.5,
-        color=color,
-        hover_name=all_toks * len(embeds),
-        title=title,
-    )
-    fig.show()
+        color.extend([(i, str(l)) for _ in range(embeds[i].shape[0])])
+
+    if save:
+        s = 0
+        for i in range(len(embeds)):
+            plt.scatter(
+                x[s : s + len(embeds[i])],
+                y[s : s + len(embeds[i])],
+                color=c[i],
+                label=labels[i],
+                alpha=0.3,
+            )
+            s += len(embeds[i])
+        plt.title(title)
+        plt.legend()
+        plt.savefig(f"saved_figs/kq/{title}.png")
+        plt.show()
+    else:
+        fig = px.scatter(
+            x=[x for (x, y) in compressed],
+            y=[y for (x, y) in compressed],
+            opacity=0.5,
+            color=color,
+            hover_name=(all_toks if not pos else list(range(len(embeds[0])))) * len(embeds),
+            title=title,
+        )
+        fig.show()
 
 
 def top_norms(embed: torch.Tensor):
@@ -236,8 +263,6 @@ def transform_vocab(layer=0, head=0, type="v", normalise=True, pos=False) -> tor
 
 def pairwise_cosine_sim(type="v", verbose=False):
     """Plot pairwise cosine similarities between OV matrices of layer 0 heads"""
-    normalised_lnormed = torch.div(lnormed_embeds.t(), lnormed_norms).t()
-    normalised_embeds = torch.div(tok_embeds.t(), tok_norms).t()
 
     g = torch.zeros((9, 9))
 
@@ -267,15 +292,13 @@ def pairwise_cosine_sim(type="v", verbose=False):
     plt.show()
 
 
-def kq(count=10, graph=False):
+def kq(count=1000):
     plt.rcParams["figure.figsize"] = (5, 5)
-    for p in [True, False]:
-        for r in [True, False]:
+    for p in [False]:
+        for r in [False]:
             for head in range(8):
                 k = transform_vocab(0, head, "k", normalise=False, pos=p)
                 q = transform_vocab(0, head, "q", normalise=False, pos=r)
-                if graph:
-                    embed_plot(k, title=f"0.{head}->k ({'pos' if p else 'embed'})")
                 vocab_k = k.shape[0]
                 vocab_q = q.shape[0]
                 print(head, p, r, vocab_k, vocab_q)
@@ -306,9 +329,18 @@ def kq(count=10, graph=False):
                         f.write(f"{a if p else all_toks[a]:<20} {b if r else all_toks[b]:<20} {vals[t]:<20.5f}\n")
 
 
+def kq_graph():
+    for head in range(8):
+        k = transform_vocab(0, head, "k", normalise=False, pos=False)
+        q = transform_vocab(0, head, "q", normalise=False, pos=False)
+        k_pos = transform_vocab(0, head, "k", normalise=False, pos=True)
+        q_pos = transform_vocab(0, head, "q", normalise=False, pos=True)
+        embed_plot_many(k, q, k_pos, q_pos, labels=["tk", "tq", "pk", "pq"], title=f"0.{head}", save=True)
+
+
 def autoencoder():
-    plt.rcParams["figure.figsize"] = (10, 20)
-    fig, axs = plt.subplots(8, 2)
+    plt.rcParams["figure.figsize"] = (40, 5)
+    fig, axs = plt.subplots(1, 8)
     for head in range(8):
         ct_k = 0
         ct_q = 0
@@ -324,52 +356,68 @@ def autoencoder():
             maxi = min(vocab_k, j + 100)
             size = maxi - j
 
-            sim = torch.einsum("ke,qe -> kq", k[j:maxi], q)
-            ct_k += (torch.argmax(sim, dim=1) == torch.arange(j, maxi, 1).to(DEVICE)).sum()
-            diag = sim.diagonal(offset=j).reshape(size, 1).expand(size, vocab_q)
-            avg_k += (sim > diag).sum()
-            all_k.extend((sim > diag).sum(dim=1).tolist())
+            # sim = torch.einsum("ke,qe -> kq", k[j:maxi], q)
+            # ct_k += (torch.argmax(sim, dim=1) == torch.arange(j, maxi, 1).to(DEVICE)).sum()
+            # diag = sim.diagonal(offset=j).reshape(size, 1).expand(size, vocab_q)
+            # avg_k += (sim > diag).sum()
+            # all_k.extend((sim > diag).sum(dim=1).tolist())
 
-            sim = torch.einsum("ke,qe -> kq", q[j:maxi], k)
+            sim = torch.einsum("qe,ke -> qk", q[j:maxi], k)
             ct_q += (torch.argmax(sim, dim=1) == torch.arange(j, maxi, 1).to(DEVICE)).sum()
             diag = sim.diagonal(offset=j).reshape(size, 1).expand(size, vocab_q)
             avg_q += (sim > diag).sum()
             all_q.extend((sim > diag).sum(dim=1).tolist())
 
-        axs[head][0].hist(all_k, bins=1000, range=(0, vocab_k))
-        axs[head][0].set_ylabel(f"head 0.{head}")
-        axs[head][1].hist(all_q, bins=1000, range=(0, vocab_k))
+        # axs[head][0].hist(all_k, bins=1000, range=(0, vocab_k))
+        axs[head].set_title(f"head 0.{head}")
+        axs[head].hist(all_q, bins=100, range=(0, vocab_k))
 
         print(
             head,
             f"{ct_k / vocab_k:<10.3%} {ct_q / vocab_k:<10.3%} {avg_k / vocab_k:<10.3f} {avg_q / vocab_k:<10.3f}",
         )
 
+    plt.xlabel("Duplicate token rank")
+    plt.ylabel("Histogram count")
     plt.show()
 
 
 def pqpk():
-    plt.rcParams["figure.figsize"] = (10, 20)
-    fig, axs = plt.subplots(4, 2)
+    plt.rcParams["figure.figsize"] = (30, 5)
+    fig, axs = plt.subplots(1, 8)
     for head in range(8):
-        k = transform_vocab(0, head, "k", normalise=False, pos=True)
-        q = transform_vocab(0, head, "q", normalise=False, pos=True)
-        sim = torch.einsum("ke,qe -> kq", k, q).tril()
-        axs[head % 4][head // 4].imshow(sim.cpu(), cmap="RdBu")
+        k = transform_vocab(0, head, "k", normalise=False, pos=True)[:50]
+        q = transform_vocab(0, head, "q", normalise=False, pos=True)[:50]
+        sim = torch.einsum("ke,qe -> qk", k, q).tril()
+        sim -= (torch.ones_like(sim) * 10000).triu(diagonal=1)
+        print(sim.shape)
+        sim = torch.softmax(sim, dim=1)
+        axs[head].imshow(sim.cpu())
+        axs[head].set_title(f"0.{head}")
     plt.show()
 
 
 def umaps():
     plt.rcParams["figure.figsize"] = (5, 5)
-    vs = []
+    vs: list[torch.Tensor] = []
     for head in tqdm(range(8)):
-        # k = transform_vocab(0, head, "k", normalise=False, pos=False)
-        q = transform_vocab(0, head, "q", normalise=False, pos=False)
-        # v = transform_vocab(0, head, "v", normalise=True, pos=False)
-        vs.append(q)
-        # embed_two_plot(k, q, title=f"0.{head}")
-        # embed_plot(v, title=f"0.{head}", uma=True)
-    embed_plot_many(*vs, title="q")
+        v = transform_vocab(0, head, "v", normalise=True, pos=False)
+        vs.append(v)
+    vs.append(normalised_lnormed)
+    g = torch.zeros((9, 9))
+    for i in range(9):
+        for j in range(i, 9):
+            dot = torch.einsum("ve,we -> vw", vs[i], vs[j])
+            cos = dot.mean().item()
+            print(i, j, cos)
+            g[i][j] = cos
+            g[j][i] = cos
+    plt.imshow(g, vmin=-1, vmax=1, cmap="RdBu")
+    plt.yticks(list(range(9)), labels=[f"0.{x}" for x in range(8)] + ["emb"])
+    plt.xticks(list(range(9)), labels=[f"0.{x}" for x in range(8)] + ["emb"])
+    plt.colorbar()
+    plt.show()
+    embed_plot_many(*vs, title="v", pos=False, save=True)
 
 
 def main():
