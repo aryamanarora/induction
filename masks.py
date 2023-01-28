@@ -148,6 +148,8 @@ def get_all_masks(inp_ixes=None):
         misleading_induction = pickle.load(f)[inp_ixes]
     misleading_induction = misleading_induction[:, 1:].logical_and(untop_200[:, :-1])
 
+    n_candidate_erb = candidate_erb.logical_not()
+
     return {
         "induction_candidates"       : induction_candidates,
         "repeat_candidates"          : repeat_candidates,
@@ -157,6 +159,7 @@ def get_all_masks(inp_ixes=None):
         "ferb"                       : ferb,
         "ferbnerb"                   : ferbnerb,
         "candidate_erb"              : candidate_erb,
+        "n_candidate_erb"            : n_candidate_erb,
         "candidate_ferb"             : candidate_ferb,
         "candidate_ferbnerb"         : candidate_ferbnerb,
         "nerb_uncommon_repeats"      : nerb_uncommon_repeats,

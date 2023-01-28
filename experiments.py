@@ -164,6 +164,8 @@ def make_experiments(
 
     # scrub subsets of heads
     res[f"a0-v-0,6"] = make_corr_i([v.chain(embeds | m(0, 6))])
+    res[f"ev+"] = make_corr_i([v.chain(m(0, 4, 6, 7))])
+    res[f"ev+-decoherent"] = make_corr_i([v.chain(m(0)), v.chain(m(4)), v.chain(m(6)), v.chain(m(7))])
     res[f"a0-v-only0,6"] = make_corr_i([v.chain(m(0, 6))])
     res[f"a0-v-only016"] = make_corr_i([v.chain(m(0, 1, 6))])
     res[f"a0-v-not0,6"] = make_corr_i([v.chain(embeds | m(1, 2, 3, 4, 5, 7))])
@@ -191,6 +193,8 @@ def make_experiments(
 
     # scrub subsets of heads
     res[f"a0-q-only-56"] = make_corr_i([q.chain(m(5, 6))])
+    res[f"eq+"] = make_corr_i([q.chain(m(0, 4, 6, 7))])
+    res[f"eq+-decoherent"] = make_corr_i([q.chain(embeds), q.chain(m(0)), q.chain(m(4)), q.chain(m(6)), q.chain(m(7))])
 
     # EMBEDDING-KEY
     res["k"] = make_corr([k])
@@ -218,6 +222,12 @@ def make_experiments(
     res["not-pth-k-6"] = make_corr_i([k.chain(m(6))])
     res["not-pth-k-7"] = make_corr_i([k.chain(m(7))])
     res["not-pth-unimp"] = make_corr_i([k.chain(m(1, 2, 3, 4, 5, 7))])
+    res["pth-k+"] = make_corr_i([k.chain(embeds | m(1, 2, 3, 4, 5, 7))])
+    res["1.5-pth-k+"] = make_corr_a([rc.IterativeMatcher("b1.a.head5").children_matcher({0}).children_matcher({2}).chain(embeds | m(1, 2, 3, 4, 5, 7))])
+    res["1.6-pth-k+"] = make_corr_a([rc.IterativeMatcher("b1.a.head6").children_matcher({0}).children_matcher({2}).chain(embeds | m(1, 2, 3, 4, 5, 7))])
+    res["1.5-not-pth-k+"] = make_corr_a([rc.IterativeMatcher("b1.a.head5").children_matcher({0}).children_matcher({2}).chain(m(0, 6))])
+    res["1.5-ek"] = make_corr_a([rc.IterativeMatcher("b1.a.head5").children_matcher({0}).children_matcher({2}).chain(m(0, 4, 6, 7))])
+    res["1.5-e46k"] = make_corr_a([rc.IterativeMatcher("b1.a.head5").children_matcher({0}).children_matcher({2}).chain(m(0, 7))])
 
     # PTH-QUERY
     res["pth-q"] = make_corr([q.chain(embeds | rc.Regex(r"\.*not_prev\.*"))])
