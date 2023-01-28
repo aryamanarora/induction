@@ -47,6 +47,7 @@ categories: list[str] = []
 
 
 def categorise(n):
+    """Categorise the tokens into some useful classes, only a helper function"""
     if all_toks[n] in ["[BEGIN]", "[END]", "\n", "<|endoftext|>"]:
         return all_toks[n]
     t: str = all_toks[n].strip("_").lower()
@@ -104,7 +105,7 @@ def print_toks(tensor: torch.Tensor, vals: torch.Tensor):
 
 
 def embed_plot(embed, comp=2, title="sus", xy=False, uma=False):
-    """Plot PCA of some embeddings"""
+    """Plot PCA/UMAP of some embeddings"""
     if uma:
         pca = UMAP()
     else:
@@ -131,6 +132,7 @@ def embed_plot(embed, comp=2, title="sus", xy=False, uma=False):
 
 
 def embed_plot_many(*embeds, labels=None, title="sus", pos=False, save=False):
+    """Plot UMAP of many embeddings (e.g. transformed by each head)"""
     umap = UMAP(n_components=2)
     compressed = umap.fit_transform(torch.cat(embeds, dim=0).cpu())
     if labels is None:
@@ -247,6 +249,7 @@ def plot_layernorm():
 
 
 def transform_vocab(layer=0, head=0, type="v", normalise=True, pos=False) -> torch.Tensor:
+    """Push vocab or pos embeds through Q, K, or OV of a head"""
     idx = layer * 8 + head
     a: torch.Tensor
     if type == "v":
@@ -263,7 +266,6 @@ def transform_vocab(layer=0, head=0, type="v", normalise=True, pos=False) -> tor
 
 def pairwise_cosine_sim(type="v", verbose=False):
     """Plot pairwise cosine similarities between OV matrices of layer 0 heads"""
-
     g = torch.zeros((9, 9))
 
     for i in range(8):
@@ -292,10 +294,11 @@ def pairwise_cosine_sim(type="v", verbose=False):
     plt.show()
 
 
-def kq(count=1000):
+def kq(count=10000):
+    """Write out top (by abs val) pairwise terms for pqpk, tqtk, etc."""
     plt.rcParams["figure.figsize"] = (5, 5)
-    for p in [False]:
-        for r in [False]:
+    for p in [True, False]:
+        for r in [True, False]:
             for head in range(8):
                 k = transform_vocab(0, head, "k", normalise=False, pos=p)
                 q = transform_vocab(0, head, "q", normalise=False, pos=r)
@@ -330,6 +333,7 @@ def kq(count=1000):
 
 
 def kq_graph():
+    """Plot the tk, tq, pk, and pq terms for a head on UMAP"""
     for head in range(8):
         k = transform_vocab(0, head, "k", normalise=False, pos=False)
         q = transform_vocab(0, head, "q", normalise=False, pos=False)
@@ -339,6 +343,7 @@ def kq_graph():
 
 
 def autoencoder():
+    """Check how much each head likes to have duplicate token behaviour in QK"""
     plt.rcParams["figure.figsize"] = (40, 5)
     fig, axs = plt.subplots(1, 8)
     for head in range(8):
@@ -383,6 +388,7 @@ def autoencoder():
 
 
 def pqpk():
+    """Visualise pqpk attention map for all heads"""
     plt.rcParams["figure.figsize"] = (30, 5)
     fig, axs = plt.subplots(1, 8)
     for head in range(8):
@@ -397,17 +403,18 @@ def pqpk():
     plt.show()
 
 
-def umaps():
+def umaps(normalise=False):
+    """UMAP of whole vocabulary for all heads together"""
     plt.rcParams["figure.figsize"] = (5, 5)
     vs: list[torch.Tensor] = []
     for head in tqdm(range(8)):
-        v = transform_vocab(0, head, "v", normalise=True, pos=False)
+        v = transform_vocab(0, head, "v", normalise=normalise, pos=False)
         vs.append(v)
-    vs.append(normalised_lnormed)
+    vs.append(normalised_lnormed if normalise else lnormed_embeds)
     g = torch.zeros((9, 9))
     for i in range(9):
         for j in range(i, 9):
-            dot = torch.einsum("ve,we -> vw", vs[i], vs[j])
+            dot = torch.einsum("ve,ve -> v", vs[i], vs[j])
             cos = dot.mean().item()
             print(i, j, cos)
             g[i][j] = cos
