@@ -132,11 +132,11 @@ def make_experiments(
         [rc.IterativeMatcher("a1.not_ind") | rc.IterativeMatcher(rc.restrict("b0", term_early_at="b1.a"))]
     )
     for i in range(8):
-        res[f"0.{i}"] = make_corr_a([m(i)])
-        res[f"0.{i}-decoherent"] = make_corr_a([rc.IterativeMatcher(f"b1.a.head{j}").chain(m(i)) for j in range(8)])
-        res[f"1-0.{i}"] = make_corr_a([rc.IterativeMatcher("b1.a").chain(m(i))])
-        res[f"resid-0.{i}"] = make_corr_a([rc.IterativeMatcher(rc.restrict(m(i), term_early_at="b1.a"))])
-        res[f"1.{i}"] = make_corr_a([rc.IterativeMatcher(f"b1.a.head{i}")])
+        res[f"scrub-0.{i}"] = make_corr_a([m(i)])
+        res[f"scrub-0.{i}-decoherent"] = make_corr_a([rc.IterativeMatcher(f"b1.a.head{j}").chain(m(i)) for j in range(8)])
+        res[f"scrub-1-0.{i}"] = make_corr_a([rc.IterativeMatcher("b1.a").chain(m(i))])
+        res[f"scrub-resid-0.{i}"] = make_corr_a([rc.IterativeMatcher(rc.restrict(m(i), term_early_at="b1.a"))])
+        res[f"scrub-1.{i}"] = make_corr_a([rc.IterativeMatcher(f"b1.a.head{i}")])
 
     res[f"resid-0"] = make_corr_a([rc.IterativeMatcher(rc.restrict("b0", term_early_at="b1.a"))])
     res[f"resid-0-indiv"] = make_corr_a(

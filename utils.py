@@ -148,7 +148,7 @@ def await_without_await(func: Callable[[], Any]):
         pass
 
 
-def compare_attns_in_cui(exps, file: str, ix_filter=None):
+def compare_attns_in_cui(exps, file: str, ix_filter=None, heads_filter=None, trim_beg=False, max_seq_len=None):
     """Load attentions into cui.
     - exps: list of tuples or strings, which are the experiments/comparisons to check
     - file: "attns" or "attn_probs" depending on what you want to see
@@ -165,11 +165,9 @@ def compare_attns_in_cui(exps, file: str, ix_filter=None):
 
     common_ixes = list(get_common_saa_ixes({exp for exp in exps_unwrapped}, ix_filter=ix_filter, type=file))
     all_attns = []
-    print(exps)
     for ix in common_ixes:
         all_attns_idx = []
         for exp in exps:
-            print(exp)
             if isinstance(exp, tuple):
                 with open(f"{RESULTS_PATH}/{exp[0]}_{file}_{ix}.pkl", "rb") as f:
                     res1, _, _ = pickle.load(f)  # res1 shape is [batch, heads, q, k]
@@ -184,14 +182,17 @@ def compare_attns_in_cui(exps, file: str, ix_filter=None):
 
     comparison_names = [f"Attention in {exp}" for exp in exps]
     vnts = []
+    heads_ixes = range(17) if heads_filter is None else heads_filter
+    first_pos = 1 if trim_beg else 0
+    last_pos = 302 if max_seq_len is None else max_seq_len
     for i, attns in enumerate(all_attns):
         b = tokenizer.batch_decode(inps[common_ixes[i]])[:-1]
         vnts.append(
             VeryNamedTensor(
-                attns,
+                attns[:, heads_ixes, first_pos:last_pos, first_pos:last_pos],
                 dim_names=["comparison", "heads", "q", "k"],
                 dim_types=["example", "heads", "seq", "seq"],
-                dim_idx_names=[comparison_names, [f"a{i // 8}.{i % 8}" for i in range(16)], b, b],
+                dim_idx_names=[comparison_names, [f"a{head // 8}.{head % 8}" for head in heads_ixes], b[first_pos:last_pos], b[first_pos:last_pos]],
                 title=f"Example {common_ixes[i]}",
             )
         )
