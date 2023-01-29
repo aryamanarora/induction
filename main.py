@@ -121,7 +121,7 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
             ("LATER CANDIDATES", all_masks["repeat_candidates"]),
             ("REPEATS", all_masks["repeats"]),
             ("UNCOMMON REPEATS", all_masks["uncommon_repeats"]),
-            ("NON-ERB UNCOMMON REPEATS", all_masks["nerb_uncommon_repeats"]),
+            ("NERB UR", all_masks["nerb_uncommon_repeats"]),
             ("MISLEADING INDUCTION", all_masks["misleading_induction"]),
             ("CANDIDATE ERB", all_masks["candidate_erb"]),
             ("NFERB UR", all_masks["nferb_uncommon_repeats"]),

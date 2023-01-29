@@ -182,7 +182,7 @@ def compare_attns_in_cui(exps, file: str, ix_filter=None, heads_filter=None, tri
 
     comparison_names = [f"Attention in {exp}" for exp in exps]
     vnts = []
-    heads_ixes = range(17) if heads_filter is None else heads_filter
+    heads_ixes = range(16) if heads_filter is None else heads_filter
     first_pos = 1 if trim_beg else 0
     last_pos = 302 if max_seq_len is None else max_seq_len
     for i, attns in enumerate(all_attns):
