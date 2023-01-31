@@ -1,0 +1,97 @@
+0 'b.a' Einsum thsd->tsd
+└‣1 'a.heads' Einsum XWsV,WdV->XWsd
+  ├‣2 'a.comb_v' Einsum XWqk,XWkV->XWqV
+  │ ├‣3 'a.attn_probs' GeneralFunction softmax
+  │ │ └‣4 'a.attn_scores' Add
+  │ │   ├‣5 'a.attn_scores_raw' Einsum srqc,srkc,r,qk->srqk
+  │ │   │ ├‣6 'a.q' Einsum sqd,rcd->srqc
+  │ │   │ │ ├‣7 'a.qk_input' Add
+  │ │   │ │ │ ├‣8 'a.norm' Add
+  │ │   │ │ │ │ ├‣'a1.ln.w.bias_arr' [256] Array a0d978058317b1f9d8d23117
+  │ │   │ │ │ │ └‣9 'ln.y_scaled' Einsum jih,h->jih
+  │ │   │ │ │ │   ├‣10 'ln.y' Einsum jih,ji->jih
+  │ │   │ │ │ │   │ ├‣11 'ln.mean_subbed' Add
+  │ │   │ │ │ │   │ │ ├‣'b0.call' Add
+  │ │   │ │ │ │   │ │ │ ├‣12 'b.a' Einsum thsd->tsd
+  │ │   │ │ │ │   │ │ │ │ └‣13 'a.heads' Einsum XWsV,WdV->XWsd
+  │ │   │ │ │ │   │ │ │ │   ├‣14 'a.comb_v' Einsum XWqk,XWkV->XWqV
+  │ │   │ │ │ │   │ │ │ │   │ ├‣15 'a.attn_probs' GeneralFunction softmax
+  │ │   │ │ │ │   │ │ │ │   │ │ └‣16 'a.attn_scores' Add
+  │ │   │ │ │ │   │ │ │ │   │ │   ├‣17 'a.attn_scores_raw' Einsum srqc,srkc,r,qk->srqk
+  │ │   │ │ │ │   │ │ │ │   │ │   │ ├‣18 'a.q' Einsum sqd,rcd->srqc
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ ├‣19 'a.qk_input' Add
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ ├‣20 'a.norm' Add
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │ ├‣'a0.ln.w.bias_arr' [256] Array 18624dfa6a41a1feac745e42
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │ └‣21 'ln.y_scaled' Einsum jih,h->jih
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │   ├‣22 'ln.y' Einsum jih,ji->jih
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │   │ ├‣23 'ln.mean_subbed' Add
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │   │ │ ├‣'idxed_embeds' GeneralFunction gen_index_at_0_c
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │   │ │ │ ├‣'t.w.tok_embeds' [50259,256] Array 26cf3704c325241f6eb75ce7
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │   │ │ │ └‣'input_toks_int' [100,300] Index [0:100,:-2]
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │   │ │ │   └‣'toks_int_var' [104091,302] Array 554076f9a3a8349a97bcb322
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │   │ │ └‣24 'ln.neg_mean' Einsum BAh,z,BA->BAz
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │   │ │   ├‣'idxed_embeds'
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │   │ │   ├‣'ln.neg' [1] Scalar -1
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │   │ │   └‣25 'ln.c.recip_hidden_size' GeneralFunction reciprocal
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │   │ │     └‣26 'ln.c.hidden_size' GeneralFunction last_dim_size
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │   │ │       └‣'idxed_embeds'
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │   │ └‣27 'ln.rsqrt' GeneralFunction rsqrt
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │   │   └‣28 'ln.var_p_eps' Add
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │   │     ├‣'ln.c.eps' [] Scalar 0.00001
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │   │     └‣29 'ln.var' Einsum jih,jih,ji->ji
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │   │       ├‣23 'ln.mean_subbed'
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │   │       ├‣23 'ln.mean_subbed'
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │   │       └‣25 'ln.c.recip_hidden_size'
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ │   └‣'a0.ln.w.scale_arr' [256] Array d7e9db6b9a28376601573d83
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │ └‣'t.w.pos_embeds_idxed' [300,256] Index [:300,:]
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ │   └‣'t.w.pos_embeds' [2048,256] Array 3ee021c3c4185a6338e7dd09
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ └‣'a0.w.q_arr' [8,32,256] Array 57386365a3400ee07baa4c31
+  │ │   │ │ │ │   │ │ │ │   │ │   │ ├‣30 'a.k' Einsum mkd,lcd->mlkc
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ ├‣19 'a.qk_input'
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ └‣'a0.w.k_arr' [8,32,256] Array acaffb902f90088f60f64b3b
+  │ │   │ │ │ │   │ │ │ │   │ │   │ ├‣31 'a.c.div_head_size' GeneralFunction rsqrt
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │ └‣32 'a.c.head_size' GeneralFunction last_dim_size
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │   └‣33 'a.c.bias_for_head_size' Einsum ljk->lj
+  │ │   │ │ │ │   │ │ │ │   │ │   │ │     └‣'a0.w.k_arr'
+  │ │   │ │ │ │   │ │ │ │   │ │   │ └‣'t.a.c.causal_mask' [300,300] Array 2a17a7d4b7b937b70cef6013
+  │ │   │ │ │ │   │ │ │ │   │ │   └‣'a.score_neg_inf_bias' Einsum qk,->qk
+  │ │   │ │ │ │   │ │ │ │   │ │     ├‣'a.not_mask' Add
+  │ │   │ │ │ │   │ │ │ │   │ │     │ ├‣'one' [] Scalar 1
+  │ │   │ │ │ │   │ │ │ │   │ │     │ └‣'not_mask.neg_mask' Einsum ab,->ab
+  │ │   │ │ │ │   │ │ │ │   │ │     │   ├‣'t.a.c.causal_mask'
+  │ │   │ │ │ │   │ │ │ │   │ │     │   └‣'neg_one' [] Scalar -1
+  │ │   │ │ │ │   │ │ │ │   │ │     └‣'a.neg_inf' [] Scalar -10000
+  │ │   │ │ │ │   │ │ │ │   │ └‣34 'a.v' Einsum Xkd,WVd->XWkV
+  │ │   │ │ │ │   │ │ │ │   │   ├‣20 'a.norm'
+  │ │   │ │ │ │   │ │ │ │   │   └‣'a0.w.v_arr' [8,32,256] Array b108d8b1e4540043f225bc3d
+  │ │   │ │ │ │   │ │ │ │   └‣'a0.w.o_arr' [8,256,32] Array 866df1552de6926577472ffd
+  │ │   │ │ │ │   │ │ │ └‣'idxed_embeds'
+  │ │   │ │ │ │   │ │ └‣35 'ln.neg_mean' Einsum BAh,z,BA->BAz
+  │ │   │ │ │ │   │ │   ├‣'b0.call'
+  │ │   │ │ │ │   │ │   ├‣'ln.neg'
+  │ │   │ │ │ │   │ │   └‣36 'ln.c.recip_hidden_size' GeneralFunction reciprocal
+  │ │   │ │ │ │   │ │     └‣37 'ln.c.hidden_size' GeneralFunction last_dim_size
+  │ │   │ │ │ │   │ │       └‣'b0.call'
+  │ │   │ │ │ │   │ └‣38 'ln.rsqrt' GeneralFunction rsqrt
+  │ │   │ │ │ │   │   └‣39 'ln.var_p_eps' Add
+  │ │   │ │ │ │   │     ├‣'ln.c.eps'
+  │ │   │ │ │ │   │     └‣40 'ln.var' Einsum jih,jih,ji->ji
+  │ │   │ │ │ │   │       ├‣11 'ln.mean_subbed'
+  │ │   │ │ │ │   │       ├‣11 'ln.mean_subbed'
+  │ │   │ │ │ │   │       └‣36 'ln.c.recip_hidden_size'
+  │ │   │ │ │ │   └‣'a1.ln.w.scale_arr' [256] Array 0251eb3e5485c286895e2a6c
+  │ │   │ │ │ └‣'t.w.pos_embeds_idxed'
+  │ │   │ │ └‣'a1.w.q_arr' [8,32,256] Array 68d0174c830f083271423667
+  │ │   │ ├‣41 'a.k' Einsum mkd,lcd->mlkc
+  │ │   │ │ ├‣7 'a.qk_input'
+  │ │   │ │ └‣'a1.w.k_arr' [8,32,256] Array 5acdca8288a7ee1ac092cfd3
+  │ │   │ ├‣42 'a.c.div_head_size' GeneralFunction rsqrt
+  │ │   │ │ └‣43 'a.c.head_size' GeneralFunction last_dim_size
+  │ │   │ │   └‣44 'a.c.bias_for_head_size' Einsum ljk->lj
+  │ │   │ │     └‣'a1.w.k_arr'
+  │ │   │ └‣'t.a.c.causal_mask'
+  │ │   └‣'a.score_neg_inf_bias'
+  │ └‣45 'a.v' Einsum Xkd,WVd->XWkV
+  │   ├‣8 'a.norm'
+  │   └‣'a1.w.v_arr' [8,32,256] Array 230e81dd8e1d51e430b0f921
+  └‣'a1.w.o_arr' [8,256,32] Array 673ae874f25dd3c65d50033c

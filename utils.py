@@ -91,6 +91,41 @@ def load_good_induction_candidates():
     )
 
 
+def load_model():
+    (loaded, tokenizer, extra_args) = load_model_id("attention_only_2")
+    loaded = {s: rc.cast_circuit(c, rc.TorchDeviceDtypeOp(device=DEVICE)) for (s, c) in loaded.items()}
+    return loaded
+
+
+def load_attn_weights(layer, head):
+    loaded = load_model()
+
+    wk = loaded["t.bind_w"].get_unique(f"a{layer}.w.k_arr").value[head]
+    wq = loaded["t.bind_w"].get_unique(f"a{layer}.w.q_arr").value[head]
+    wv = loaded["t.bind_w"].get_unique(f"a{layer}.w.v_arr").value[head]
+    wo = loaded["t.bind_w"].get_unique(f"a{layer}.w.o_arr").value[head]
+
+    return wk, wq, wv, wo
+
+
+def load_embeds():
+    loaded = load_model()
+    tok_embeds = loaded["t.w.tok_embeds"].value
+    pos_embeds = loaded["t.w.pos_embeds"].value
+
+    return tok_embeds, pos_embeds
+
+
+def layer_norm(resid, layer):
+    """
+    Assume resid is a batched tensor (... x resid_len)
+    """
+    loaded = load_model()
+    ln_scale = loaded["t.bind_w"].get_unique(f"a{layer}.ln.w.scale_arr").value
+    ln_bias = loaded["t.bind_w"].get_unique(f"a{layer}.ln.w.bias_arr").value
+    return torch.nn.functional.layer_norm(resid, (resid.shape[-1],), ln_scale, ln_bias)
+
+
 def tok_stdize_simple_strip(all_tok_strs, tok_ix):
     return all_tok_strs[tok_ix].upper().strip(' ()[]{},.:;-_"')
 
@@ -217,7 +252,7 @@ def compare_saa_in_cui(comparisons, ix_filter=None, mask=None):
         for exp1, exp2 in comparisons:
             loss_diff = get_diff_mean_per_tok_loss(exp1, exp2, ix)
             if mask is not None:
-                loss_diff = loss_diff * mask[ix]
+                loss_diff = loss_diff * torch.cat([torch.zeros((1,)), mask[ix].cpu()])
             ix_loss_diffs.append(loss_diff)
         all_loss_diffs.append(torch.cat(ix_loss_diffs, dim=0))
 

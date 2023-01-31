@@ -26,11 +26,11 @@ def build_basic_token_masks():
             if tok.item() in seen_toks:
                 repeats_mask[i, j] = True
             seen_toks.add(tok.item())
-    with open(os.path.join(DATA_PATH, "mask_candidates.pkl"), "wb") as f:
+    with open(os.path.join(DATA_PATH, "masks", "mask_candidates.pkl"), "wb") as f:
         pickle.dump(candidates_mask, f)
-    with open(os.path.join(DATA_PATH, "mask_repeats.pkl"), "wb") as f:
+    with open(os.path.join(DATA_PATH, "masks", "mask_repeats.pkl"), "wb") as f:
         pickle.dump(repeats_mask, f)
-    with open(os.path.join(DATA_PATH, "mask_repeat_candidates.pkl"), "wb") as f:
+    with open(os.path.join(DATA_PATH, "masks", "mask_repeat_candidates.pkl"), "wb") as f:
         pickle.dump(repeats_mask.logical_and(candidates_mask), f)
 
 
@@ -54,7 +54,7 @@ def build_fuzzy_repeat_mask(stdizing_func, mask_name="fuzzy_repeats"):
             if stdized_tok in seen_toks:
                 repeats_mask[i, j] = True
             seen_toks.add(stdized_tok)
-    with open(os.path.join(DATA_PATH, f"mask_{mask_name}.pkl"), "wb") as f:
+    with open(os.path.join(DATA_PATH, "masks", f"mask_{mask_name}.pkl"), "wb") as f:
         pickle.dump(repeats_mask, f)
 
 
@@ -89,7 +89,7 @@ def build_end_of_repeated_bigram_mask(stdizing_func=lambda x: x, mask_name="ends
                 end_of_repeated_bigram_mask[i, j+2] = True
             else:
                 seen_bigrams.add((fst, snd))
-    with open(os.path.join(DATA_PATH, f"mask_{mask_name}.pkl"), "wb") as f:
+    with open(os.path.join(DATA_PATH, "masks", f"mask_{mask_name}.pkl"), "wb") as f:
         pickle.dump(end_of_repeated_bigram_mask, f)
 
 
@@ -106,7 +106,7 @@ def build_misleading_induction_mask():
             if fst in seen_bigrams and snd not in seen_bigrams[fst]:
                 misleading_induction_mask[i, j+2] = True
             seen_bigrams[fst].add(snd)
-    with open(os.path.join(DATA_PATH, "mask_misleading_induction.pkl"), "wb") as f:
+    with open(os.path.join(DATA_PATH, "masks", "mask_misleading_induction.pkl"), "wb") as f:
         pickle.dump(misleading_induction_mask, f)
 
 
@@ -114,26 +114,26 @@ def get_all_masks(inp_ixes=None):
     if inp_ixes is None:
         inp_ixes = load_inputs()[:, -1]
     
-    with open(os.path.join(DATA_PATH, "mask_candidates.pkl"), "rb") as f:
+    with open(os.path.join(DATA_PATH, "masks", "mask_candidates.pkl"), "rb") as f:
         induction_candidates = pickle.load(f)[inp_ixes][:, :-1]
 
-    with open(os.path.join(DATA_PATH, "mask_repeat_candidates.pkl"), "rb") as f:
+    with open(os.path.join(DATA_PATH, "masks", "mask_repeat_candidates.pkl"), "rb") as f:
         repeat_candidates = pickle.load(f)[inp_ixes][:, :-1]
 
-    with open(os.path.join(DATA_PATH, "mask_repeats.pkl"), "rb") as f:
+    with open(os.path.join(DATA_PATH, "masks", "mask_repeats.pkl"), "rb") as f:
         repeats = pickle.load(f)[inp_ixes][:, 1:]
 
     untop_200 = build_token_frequency_mask(200)[inp_ixes]
     uncommon_repeats = repeats.logical_and(untop_200[:, 1:])
 
-    with open(os.path.join(DATA_PATH, "mask_ends_of_repeated_bigrams.pkl"), "rb") as f:
+    with open(os.path.join(DATA_PATH, "masks", "mask_ends_of_repeated_bigrams.pkl"), "rb") as f:
         erb = pickle.load(f)[inp_ixes][:, 1:]
 
     nerb = erb.logical_not()
     candidate_erb = induction_candidates.logical_and(erb)
     nerb_uncommon_repeats = nerb.logical_and(uncommon_repeats)
 
-    with open(os.path.join(DATA_PATH, "mask_simple_strip_fuzzy_ends_of_repeated_bigrams.pkl"), "rb") as f:
+    with open(os.path.join(DATA_PATH, "masks", "mask_simple_strip_fuzzy_ends_of_repeated_bigrams.pkl"), "rb") as f:
         ferb = pickle.load(f)[inp_ixes][:, 1:]
 
     nferb = ferb.logical_not()
@@ -144,7 +144,7 @@ def get_all_masks(inp_ixes=None):
     nferbnerb_uncommon_repeats = ferbnerb.logical_and(uncommon_repeats).logical_not()
 
 
-    with open(os.path.join(DATA_PATH, "mask_misleading_induction.pkl"), "rb") as f:
+    with open(os.path.join(DATA_PATH, "masks", "mask_misleading_induction.pkl"), "rb") as f:
         misleading_induction = pickle.load(f)[inp_ixes]
     misleading_induction = misleading_induction[:, 1:].logical_and(untop_200[:, :-1])
 
