@@ -119,6 +119,9 @@ def load_embeds():
 def layer_norm(resid, layer):
     """
     Assume resid is a batched tensor (... x resid_len)
+    Some applications might need to call layer norm repeatedly. In these cases,
+    it will almost certainly be better to do this manually instead of calling
+    this function many times, to avoid calling `load_model` repeatedly (slow).
     """
     loaded = load_model()
     ln_scale = loaded["t.bind_w"].get_unique(f"a{layer}.ln.w.scale_arr").value
