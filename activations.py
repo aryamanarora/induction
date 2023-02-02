@@ -124,7 +124,7 @@ def compute_cross_layer_composition(l0_head, l1_head):
     means = []
     for embed in tqdm(tok_embeds):
         post_ln = torch.nn.functional.layer_norm(real_preln_l1 + embed, (embed.shape[-1],), ln_1_scale, ln_1_bias)
-        means.append(torch.einsum("bpe,bre->bpr", real_q_1x, post_ln).mean())
+        means.append(torch.einsum("bpe,bre->bpr", real_q_1x, post_ln).mean().item())
         torch.cuda.empty_cache()
 
     with open(f"data/activations/mean_0{l0_head}_1{l1_head}_compositions.pkl", "wb") as f:
