@@ -305,6 +305,21 @@ def make_experiments(
                 }
             )
 
+    for i in range(1, 256):
+        res[f"k-1.6-pre-ln-proj-{i}d"] = make_corr(
+            [rc.Matcher("proj_residual")],
+            options={
+                "split_with_projection": [
+                    (
+                        rc.IterativeMatcher("b1").chain(
+                            rc.restrict("b1.a.head6", end_depth=3)).chain(
+                            rc.restrict("a.attn_probs", end_depth=3)).chain(
+                            rc.restrict("a.k", end_depth=4)).chain(
+                            rc.restrict("b0")
+                        ), f"1.6k_pre_ln_{i}d"),
+                ]
+            }
+        )
     return res
 
 

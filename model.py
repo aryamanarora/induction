@@ -1,5 +1,7 @@
 # %%
 import torch
+import utils
+from functools import partial
 
 import rust_circuit as rc
 from interp.circuit.interop_rust.model_rewrites import To, configure_transformer
@@ -68,6 +70,7 @@ def construct_circuit(
     make_pth_zero: list = [],
     actual_beg: int = 0,
     make_pth_diag: list = [],
+    split_with_projection: list = [],
 ):
     """Load the 2L attn-only model and make circuit that calculates loss on the dataset, with empty inputs"""
 
@@ -101,7 +104,7 @@ def construct_circuit(
     )
 
     # split by heads
-    if make_pth_true_prev or make_pth_beg_attend or make_pth_zero or make_pth_diag:
+    if make_pth_true_prev or make_pth_beg_attend or make_pth_zero or make_pth_diag or split_with_projection:
         split_heads = "all"
     assert split_heads in list(split_head_configs.keys())
     split_head_config = split_head_configs[split_heads]
@@ -256,6 +259,11 @@ def construct_circuit(
         model = model.update(q(*flip), lambda x: k_w)
         model = model.update(k(*flip), lambda x: q_w)
 
+    if split_with_projection:
+        model = rc.substitute_all_modules(model)
+    for m, proj_name in split_with_projection:
+        transform = partial(utils.split_circuit_with_projection, proj_name)
+        model = model.update(m, lambda c: transform(c))
     return model, good_induction_candidate, tokenizer, toks_int_values
 
 

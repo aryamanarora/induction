@@ -129,6 +129,23 @@ def layer_norm(resid, layer):
     return torch.nn.functional.layer_norm(resid, (resid.shape[-1],), ln_scale, ln_bias)
 
 
+def load_projection(projection_name):
+    with open(os.path.join(DATA_PATH, "projections", f"{projection_name}.pkl"), "rb") as f:
+        return pickle.load(f)
+
+
+def split_circuit_with_projection(projection_name, circuit):
+    proj = load_projection(projection_name)
+    proj_center = rc.Array(proj.pcenter, name="proj_center")
+    centered_circuit = rc.Add.minus(circuit, proj_center, name="proj_input_uncentered")
+    proj_weights = rc.Array(proj.ForwardCtx().get_pmat(proj), name="proj_weights")
+    projection_target = rc.Einsum.from_einsum_string("ij,jk->ik", centered_circuit, proj_weights, name="proj_target_uncentered")
+    projection_target = rc.Add(projection_target, proj_center, name="proj_target")
+    projection_residual = rc.Add.minus(circuit, projection_target, name="proj_residual")
+    projection_recon = rc.Add(projection_target, projection_residual, name="proj_recon")
+    return projection_recon
+
+
 def tok_stdize_simple_strip(all_tok_strs, tok_ix):
     return all_tok_strs[tok_ix].upper().strip(' ()[]{},.:;-_"')
 
