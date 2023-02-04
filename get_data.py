@@ -1,10 +1,24 @@
 from experiments import make_make_corr, make_experiments, FixedSampler
+from interp.circuit.causal_scrubbing.hypothesis import ExactSampler
 from main import run_experiment
 from tqdm import tqdm
 import argparse
+import csv
 
+EXPS = ["unscrubbed"]
 
-def run(exps: list[str], attns: bool, attn_scores: bool, ct: int):
+def run(exps: list[str], attns: bool, attn_scores: bool, ct: int, evals: bool):
+    if evals:
+        with open("out.csv", "w", newline="") as csvfile:
+            fieldnames = ["exp name", "OVERALL", "LATER CANDIDATES", "NERB UR", "CANDIDATE ERB", "NFERB UR", "UNCOMMON REPEATS", "REPEATS", "MISLEADING INDUCTION", "CANDIDATES"]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            experiments = make_experiments(make_make_corr(ExactSampler()))
+            for exp in tqdm(exps):
+                _, _, _, evals_dict = run_experiment(experiments, exp)
+                evals_dict = {k: v if k == "exp name" else v[0] for k, v in evals_dict.items()}
+                writer.writerow(evals_dict)
+        return
+
     name = "saa"
     if attns:
         name = "attns"
@@ -20,13 +34,14 @@ def run(exps: list[str], attns: bool, attn_scores: bool, ct: int):
 def main():
     # parse arguments
     parser = argparse.ArgumentParser(description="Save inference runs for visualisation on 2L attn only models")
-    parser.add_argument("--exp", action="store", dest="exp_name", nargs="+", type=str, default=["unscrubbed"])
+    parser.add_argument("--exp", action="store", dest="exp_name", nargs="+", type=str, default=EXPS)
     parser.add_argument("--attns", action="store_true", dest="attns")
     parser.add_argument("--attn-scores", action="store_true", dest="attn_scores")
     parser.add_argument("--ct", action="store", dest="count", type=int, default=50)
+    parser.add_argument("--evals", action="store_true", dest="evals")
     args = parser.parse_args()
 
-    run(args.exp_name, args.attns, args.attn_scores, args.count)
+    run(args.exp_name, args.attns, args.attn_scores, args.count, args.evals)
 
 
 if __name__ == "__main__":

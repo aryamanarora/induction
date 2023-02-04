@@ -16,10 +16,10 @@ def compare(exp1, exp2, num_samples, idx, verbose, plot=True):
     assert exp2 in list(experiments.keys())
 
     tokenizer = load_tokenizer()
-    res1, _, inps1 = run_experiment(
+    res1, _, inps1, _ = run_experiment(
         experiments, exp1, num_samples if exp1 != "unscrubbed" else idx + 1, "", verbose
     )
-    res2, _, inps2 = run_experiment(experiments, exp2, num_samples if exp2 != "unscrubbed" else idx + 1, "", verbose)
+    res2, _, inps2, _ = run_experiment(experiments, exp2, num_samples if exp2 != "unscrubbed" else idx + 1, "", verbose)
 
     mean1 = res1.mean(dim=0)
     mean2 = res2.mean(dim=0)

@@ -320,6 +320,39 @@ def make_experiments(
                 ]
             }
         )
+
+    for i in range(1, 256):
+        res[f"k-1.6-post-ln-proj-{i}d"] = make_corr(
+            [rc.Matcher("proj_residual")],
+            options={
+                "split_with_projection": [
+                    (
+                        rc.IterativeMatcher("b1").chain(
+                            rc.restrict("b1.a.head6", end_depth=3)).chain(
+                            rc.restrict("a.attn_probs", end_depth=3)).chain(
+                            rc.restrict("a.k", end_depth=4)).chain(
+                            rc.restrict("a1.norm", end_depth=3)
+                        ), f"1.6k_post_ln_{i}d"),
+                ]
+            }
+        )
+
+    for i in range(1, 256):
+        res[f"k-1.6-l0-out-proj-{i}d"] = make_corr(
+            [rc.Matcher("proj_residual")],
+            options={
+                "split_with_projection": [
+                    (
+                        rc.IterativeMatcher("b1").chain(
+                            rc.restrict("b1.a.head6", end_depth=3)).chain(
+                            rc.restrict("a.attn_probs", end_depth=3)).chain(
+                            rc.restrict("a.k", end_depth=4)).chain(
+                            rc.restrict("b0")).chain(
+                            rc.restrict("b0.a")
+                        ), f"1.6k_l0_out_{i}d"),
+                ]
+            }
+        )
     return res
 
 

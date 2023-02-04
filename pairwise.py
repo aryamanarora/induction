@@ -59,7 +59,7 @@ def run_pairs(
         for i in range((h + 1) if not repeat else 0, len(heads2)):
             name = f"{layer1}.{h}{heads2[i]}"
             exps.append((name, h))
-            res, _, _ = run_experiment(experiments, exp + "-" + name, samples, verbose=-1)
+            res, _, _, _ = run_experiment(experiments, exp + "-" + name, samples, verbose=-1)
             torch.cuda.empty_cache()
             loss = res.mean().item()
             loss_vectors.append(res.reshape(-1).cpu().numpy())

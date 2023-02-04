@@ -80,13 +80,6 @@ toks_dataset = TensorDataset(toks_int_values.value.to('cpu'))
 toks_int_values_validation = load_toks(False, 0, 25, 'toks_int_values_validation')
 
 CACHE_DIR = f'{RRFS_DIR}/ryan/induction_scrub/cached_vals'
-good_induction_candidate: torch.Tensor = (
-    torch.load(f'{CACHE_DIR}/induction_candidates_2022-10-15 04:48:29.970735.pt')
-    .to(device=DEVICE)
-)
-
-print('good ind rate',
-      good_induction_candidate[toks_int_values.value].float().mean())
 
 toks_int_values = rc.cast_circuit(
     toks_int_values,
@@ -202,19 +195,6 @@ def load_and_transform_circuit(model_id: str):
         **{"ll.input": renamed_circuit, "ll.label": true_toks},
         name="t.loss",
     )
-    is_good_induction_candidate = rc.GeneralFunction.gen_index(
-        x=rc.Array(good_induction_candidate.to(torch.float32),
-                   name='tok_is_induct_candidate'),
-        index=input_toks,
-        index_dim=0,
-        name='induct_candidate',
-    )
-    loss = rc.Einsum(
-        (loss, (0,)),
-        (is_good_induction_candidate, (0,)),
-        out_axes=(0,),
-        name='loss_on_candidates',
-    )
     expected_loss_by_seq = rc.Cumulant(loss, name='t.expected_loss_by_seq')
     expected_loss = expected_loss_by_seq.mean(
         name='t.expected_loss', scalar_name='recip_seq')
@@ -289,8 +269,8 @@ def sample_and_evaluate(c: rc.Circuit, batch_size=256) -> float:
 
 baseline_loss = sample_and_evaluate(circuit)
 print(f'{baseline_loss=}')
-torch.testing.assert_close(baseline_loss, 0.17, atol=1e-2, rtol=1e-3)
 
+torch.cuda.empty_cache()
 def scrub_input(c: rc.Circuit, in_path: rc.IterativeMatcher) -> rc.Circuit:
     c1 = c.update(in_path.chain('toks_int_var'), lambda _: toks_int_var_other)
     assert c1 != c
@@ -361,7 +341,7 @@ print_scrub = ScrubPrinter(toks_int_var.name, toks_int_var_other.name)
 def solve_projection(
         c: rc.Circuit, matcher: rc.IterativeMatcher,
         proj_dim: Union[int, list[int]],
-        batch_size=256, num_iters=250, adv_solving_mode=None,
+        batch_size=256, num_iters=2000, adv_solving_mode=None,
         init_proj=None, pca=False, **kwargs
     ) -> Union[CircuitWithProjection, list[CircuitWithProjection]]:
     """solve the projection matrix by training on all samples
@@ -407,16 +387,12 @@ def solve_projection(
         toks_batch = toks_batch.to(DEVICE)
         toks_batch_other = toks_batch_other.to(DEVICE)
 
-        with torch.no_grad():
-            seq_locs = good_induction_candidate[toks_batch[:, :-1]]
-
         # use the same shared_computing object in multiple solvers to avoid
         # repeated computation
         shared_computing = LookAheadProjectionSolver.SharedComputingContext()
 
         for i, solver in enumerate(solvers):
-            solver.update(toks_batch, toks_batch_other, seq_locs,
-                          shared_computing=shared_computing)
+            solver.update(toks_batch, toks_batch_other, shared_computing=shared_computing)
             if (iter_num % max(num_iters // 10, 1) == 0 or
                     iter_num == num_iters - 1):
                 tqdm.write(
@@ -445,22 +421,34 @@ def solve_projection(
 # Helper functions for low-dim decomposition on the output of induction heads or
 # on the output of prev-token head
 
-ind_matcher = make_matcher(['a1.h6']).chain("a.attn_probs").chain("a.k").chain("a1.input")
-def run_ind_head(title, need_ret=False, proj_dim=30, **kwargs):
+# post-ln
+# ind_matcher = make_matcher(['a1.h6']).chain("a.attn_probs").chain("a.k").chain("a1.norm")
+
+# pre-ln
+# ind_matcher = make_matcher(['a1.h6']).chain("a.attn_probs").chain("a.k").chain("a1.norm").chain("a1.input")
+
+# l0 out
+# ind_matcher = make_matcher(['a1.h6']).chain("a.attn_probs").chain("a.k").chain("a1.norm").chain("a1.input").chain("a0")
+
+# l0h0 out
+ind_matcher = make_matcher(['a1.h6']).chain("a.attn_probs").chain("a.k").chain("a1.norm").chain("a1.input").chain("a0").chain("a0.h0")
+
+all_dims = list(range(1, 33)) + [64, 96, 128, 160, 192, 224, 255]
+def run_ind_head(title, proj_dim=30, **kwargs):
     print(f'=============== projecting k-input of induction heads: {title}')
-    p = solve_projection(circuit, ind_matcher, proj_dim=proj_dim, **kwargs)
-    print_scrub(p.circuit)
-    print(f'evaluating {p.proj.pmat}')
-    loss = sample_and_evaluate(p.circuit)
-    rate = (loss - tot_scrub_loss) / (baseline_loss - tot_scrub_loss )
-    logprint(f'induction head: {title}: proj={p.proj}'
-             f'{loss=:.4g} / ({baseline_loss:.4g}, {tot_scrub_loss:.4g}):'
-             f' {rate*100:.2f}%')
-    if need_ret:
-        return p
+    ps = solve_projection(circuit, ind_matcher, proj_dim=proj_dim, **kwargs)
+    for i, p in enumerate(ps):
+        print(f"evaluating {all_dims[i]}d projection")
+        print(f'evaluating {p.proj.pmat}')
+        loss = sample_and_evaluate(p.circuit)
+        rate = (loss - tot_scrub_loss) / (baseline_loss - tot_scrub_loss )
+        logprint(f'induction head: {title}: proj={p.proj}'
+                 f'{loss=:.4g} / ({baseline_loss:.4g}, {tot_scrub_loss:.4g}):'
+                 f' {rate*100:.2f}%')
+    return ps
 # %%
-for i in range(1, 33):
-    proj = run_ind_head(f"dim{i}", need_ret=True, proj_dim=i)
-    with open(f"data/projections/1.6k_pre_ln_{i}d.pkl", "wb") as f:
+projs = run_ind_head(f"all_dims", proj_dim=all_dims, batch_size=128)
+for i, proj in enumerate(projs):
+    with open(f"data/projections/1.6k_l0h0_out_{all_dims[i]}d.pkl", "wb") as f:
         pickle.dump(proj.proj, f)
 # %%

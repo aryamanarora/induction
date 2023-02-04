@@ -126,6 +126,7 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
             ("CANDIDATE ERB", all_masks["candidate_erb"]),
             ("NFERB UR", all_masks["nferb_uncommon_repeats"]),
         ]
+        evals_dict = {"exp name": exp_name}
         for eval_name, mask in evals:
             if verbose > -1:
                 print(eval_name)
@@ -134,6 +135,7 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
             var = masked_res.var().item()
             shape = masked_res.shape[0]
             eval_scores.extend([mean, var, shape])
+            evals_dict[eval_name] = (mean, var, shape)
             if verbose > -1:
                 print(f"{mean:>10.3f}{var:>10.3f}{shape:>10}")
 
@@ -142,4 +144,4 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
             writer = csv.writer(f)
             writer.writerow([exp_name, SEED, samples, timestamp] + eval_scores)
 
-    return res, scrubbed_circuit, inps
+    return res, scrubbed_circuit, inps, evals_dict
