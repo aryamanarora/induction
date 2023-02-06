@@ -104,17 +104,19 @@ def print_toks(tensor: torch.Tensor, vals: torch.Tensor):
         print(f"{t:<20}{vals[i].item():<20.3f}")
 
 
-def embed_plot(embed, comp=2, title="sus", xy=False, uma=False):
+def embed_plot(
+    embed: torch.Tensor, num_components: int = 2, title: str = "", plot_components: bool = False, umap: bool = False
+):
     """Plot PCA/UMAP of some embeddings"""
-    if uma:
-        pca = UMAP()
-    else:
-        pca = PCA(n_components=comp)
+    pca = UMAP() if umap else PCA(n_components=num_components)
     compressed = pca.fit_transform(embed.cpu())
-    if not uma:
+
+    if not umap:
         print(pca.explained_variance_ratio_)
         print(sum(pca.explained_variance_ratio_))
-    if comp == 2:
+
+    # plot if 2d
+    if num_components == 2:
         fig = px.scatter(
             x=[x for (x, y) in compressed],
             y=[y for (x, y) in compressed],
@@ -125,13 +127,15 @@ def embed_plot(embed, comp=2, title="sus", xy=False, uma=False):
         )
         fig.show()
 
-    if xy:
-        for i in range(comp):
+    if plot_components:
+        for i in range(num_components):
             plt.plot(list(range(len(compressed))), [x[i] for x in compressed])
         plt.show()
 
+    return compressed
 
-def embed_plot_many(*embeds, labels=None, title="sus", pos=False, save=False):
+
+def embed_plot_many(*embeds: torch.Tensor, labels=None, title="", pos=False, savefig=False):
     """Plot UMAP of many embeddings (e.g. transformed by each head)"""
     umap = UMAP(n_components=2)
     compressed = umap.fit_transform(torch.cat(embeds, dim=0).cpu())
@@ -146,7 +150,7 @@ def embed_plot_many(*embeds, labels=None, title="sus", pos=False, save=False):
     for i, l in enumerate(labels):
         color.extend([(i, str(l)) for _ in range(embeds[i].shape[0])])
 
-    if save:
+    if savefig:
         s = 0
         for i in range(len(embeds)):
             plt.scatter(
@@ -181,15 +185,6 @@ def top_norms(embed: torch.Tensor):
     norm_sorted = embed[norm_sorted_order]
     print_toks(norm_sorted_order[:10], norms)
     print_toks(norm_sorted_order[-10:], norms)
-
-
-def top_matrix(matrix: torch.Tensor):
-    s = matrix.shape
-    matrix = matrix.reshape(-1)
-    order = matrix.sort().indices[-10:]
-    for x in order:
-        i, j = x // s[1], x % s[1]
-        print(f"{all_toks[i]:<20}{all_toks[j]:<20}{matrix[x].item():<20.3f}")
 
 
 def plot_layernorm():
@@ -339,7 +334,7 @@ def kq_graph():
         q = transform_vocab(0, head, "q", normalise=False, pos=False)
         k_pos = transform_vocab(0, head, "k", normalise=False, pos=True)
         q_pos = transform_vocab(0, head, "q", normalise=False, pos=True)
-        embed_plot_many(k, q, k_pos, q_pos, labels=["tk", "tq", "pk", "pq"], title=f"0.{head}", save=True)
+        embed_plot_many(k, q, k_pos, q_pos, labels=["tk", "tq", "pk", "pq"], title=f"0.{head}", savefig=True)
 
 
 def autoencoder():
@@ -424,7 +419,7 @@ def umaps(normalise=False):
     plt.xticks(list(range(9)), labels=[f"0.{x}" for x in range(8)] + ["emb"])
     plt.colorbar()
     plt.show()
-    embed_plot_many(*vs, title="v", pos=False, save=True)
+    embed_plot_many(*vs, title="v", pos=False, savefig=True)
 
 
 def main():
