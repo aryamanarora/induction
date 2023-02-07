@@ -223,11 +223,15 @@ def make_experiments(
     res["not-pth-k-7"] = make_corr_i([k.chain(m(7))])
     res["not-pth-unimp"] = make_corr_i([k.chain(m(1, 2, 3, 4, 5, 7))])
     res["pth-k+"] = make_corr_i([k.chain(embeds | m(1, 2, 3, 4, 5, 7))])
+    res["1.5-pth-k"] = make_corr_a([rc.IterativeMatcher("b1.a.head5").children_matcher({0}).children_matcher({2}).chain(embeds | m(1, 2, 3, 4, 5, 6, 7))])
+    res["1.6-pth-k"] = make_corr_a([rc.IterativeMatcher("b1.a.head6").children_matcher({0}).children_matcher({2}).chain(embeds | m(1, 2, 3, 4, 5, 6, 7))])
     res["1.5-pth-k+"] = make_corr_a([rc.IterativeMatcher("b1.a.head5").children_matcher({0}).children_matcher({2}).chain(embeds | m(1, 2, 3, 4, 5, 7))])
     res["1.6-pth-k+"] = make_corr_a([rc.IterativeMatcher("b1.a.head6").children_matcher({0}).children_matcher({2}).chain(embeds | m(1, 2, 3, 4, 5, 7))])
     res["1.5-not-pth-k+"] = make_corr_a([rc.IterativeMatcher("b1.a.head5").children_matcher({0}).children_matcher({2}).chain(m(0, 6))])
-    res["1.5-ek"] = make_corr_a([rc.IterativeMatcher("b1.a.head5").children_matcher({0}).children_matcher({2}).chain(m(0, 4, 6, 7))])
-    res["1.5-e46k"] = make_corr_a([rc.IterativeMatcher("b1.a.head5").children_matcher({0}).children_matcher({2}).chain(m(0, 7))])
+    res["1.5-e1235k"] = make_corr_a([rc.IterativeMatcher("b1.a.head5").children_matcher({0}).children_matcher({2}).chain(m(0, 4, 6, 7))])
+    res["1.5-e123456k"] = make_corr_a([rc.IterativeMatcher("b1.a.head5").children_matcher({0}).children_matcher({2}).chain(m(0, 7))])
+    res["1.5-ek"] = make_corr_a([rc.IterativeMatcher("b1.a.head5").children_matcher({0}).children_matcher({2}).chain(m(0, 1, 2, 3, 4, 5, 6, 7))])
+    res["1.6-ek"] = make_corr_a([rc.IterativeMatcher("b1.a.head6").children_matcher({0}).children_matcher({2}).chain(m(0, 1, 2, 3, 4, 5, 6, 7))])
 
     # PTH-QUERY
     res["pth-q"] = make_corr([q.chain(embeds | rc.Regex(r"\.*not_prev\.*"))])
@@ -350,6 +354,59 @@ def make_experiments(
                             rc.restrict("b0")).chain(
                             rc.restrict("b0.a")
                         ), f"1.6k_l0_out_{i}d"),
+                ]
+            }
+        )
+
+    for i in range(1, 256):
+        res[f"k-1.6-l0h0-out-proj-{i}d"] = make_corr(
+            [rc.Matcher("proj_residual")],
+            options={
+                "split_with_projection": [
+                    (
+                        rc.IterativeMatcher("b1").chain(
+                            rc.restrict("b1.a.head6", end_depth=3)).chain(
+                            rc.restrict("a.attn_probs", end_depth=3)).chain(
+                            rc.restrict("a.k", end_depth=4)).chain(
+                            rc.restrict("b0")).chain(
+                            rc.restrict("b0.a")).chain(
+                            rc.restrict("b0.a.head0")
+                        ), f"1.6k_l0h0_out_{i}d"),
+                ]
+            }
+        )
+
+    for i in range(1, 256):
+        res[f"k-1.5-transplant-1.6-l0-out-proj-{i}d"] = make_corr(
+            [rc.Matcher("proj_residual")],
+            options={
+                "split_with_projection": [
+                    (
+                        rc.IterativeMatcher("b1").chain(
+                            rc.restrict("b1.a.head5", end_depth=3)).chain(
+                            rc.restrict("a.attn_probs", end_depth=3)).chain(
+                            rc.restrict("a.k", end_depth=4)).chain(
+                            rc.restrict("b0")).chain(
+                            rc.restrict("b0.a")
+                        ), f"1.6k_l0_out_{i}d"),
+                ]
+            }
+        )
+
+    for i in range(1, 256):
+        res[f"k-1.5-transplant-1.6-l0h0-out-proj-{i}d"] = make_corr(
+            [rc.Matcher("proj_residual")],
+            options={
+                "split_with_projection": [
+                    (
+                        rc.IterativeMatcher("b1").chain(
+                            rc.restrict("b1.a.head5", end_depth=3)).chain(
+                            rc.restrict("a.attn_probs", end_depth=3)).chain(
+                            rc.restrict("a.k", end_depth=4)).chain(
+                            rc.restrict("b0")).chain(
+                            rc.restrict("b0.a")).chain(
+                            rc.restrict("b0.a.head0")
+                        ), f"1.6k_l0h0_out_{i}d"),
                 ]
             }
         )
