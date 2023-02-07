@@ -1,7 +1,7 @@
-from experiments import make_make_corr, make_experiments, FixedSampler
-from interp.circuit.causal_scrubbing.hypothesis import ExactSampler
+from experiments import make_experiments, make_corr, FixedSampler
 from main import run_experiment
 from tqdm import tqdm
+from functools import partial
 import argparse
 import csv
 
@@ -12,7 +12,7 @@ def run(exps: list[str], attns: bool, attn_scores: bool, ct: int, evals: bool):
         with open("out.csv", "w", newline="") as csvfile:
             fieldnames = ["exp name", "OVERALL", "LATER CANDIDATES", "NERB UR", "CANDIDATE ERB", "NFERB UR", "UNCOMMON REPEATS", "REPEATS", "MISLEADING INDUCTION", "CANDIDATES"]
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            experiments = make_experiments(make_make_corr(ExactSampler()))
+            experiments = make_experiments()
             for exp in tqdm(exps):
                 _, _, _, evals_dict = run_experiment(experiments, exp)
                 evals_dict = {k: v if k == "exp name" else v[0] for k, v in evals_dict.items()}
@@ -25,7 +25,7 @@ def run(exps: list[str], attns: bool, attn_scores: bool, ct: int, evals: bool):
     if attn_scores:
         name = "attn_scores"
     for i in tqdm(range(ct)):
-        experiments = make_experiments(make_make_corr(FixedSampler(i)))
+        experiments = make_experiments(partial(make_corr, sampler=FixedSampler(i)))
         for exp in exps:
             save_name = f"{exp}_{name}_{i}"
             run_experiment(experiments, exp, 1000, save_name, 0, get_attns=attns, get_attn_scores=attn_scores)

@@ -15,24 +15,6 @@ from typing import Optional
 DEVICE = "cuda:0"
 seq_len = 300
 
-split_head_configs = {
-    "labelled": {
-        0: [(0, "yes_prev"), (S[1:], "not_prev")],
-        1: [
-            (S[5:7], "ind"),
-            (torch.tensor([0, 1, 2, 3, 4, 7]).to(DEVICE), "not_ind"),
-        ],
-    },
-    "all": {0: [(i, f"head{i}") for i in range(8)], 1: [(i, f"head{i}") for i in range(8)]},
-    "b0-all": {
-        0: [(i, f"head{i}") for i in range(8)],
-        1: [
-            (S[5:7], "ind"),
-            (torch.tensor([0, 1, 2, 3, 4, 7]).to(DEVICE), "not_ind"),
-        ],
-    },
-}
-
 
 @torch.inference_mode()
 def load_model_and_data():
@@ -58,7 +40,7 @@ def load_model_and_data():
 
 @torch.inference_mode()
 def construct_circuit(
-    split_heads: str = "labelled",
+    sub_all: bool = True,
     split_pth_ov_by_pt_or_not: bool = False,
     transpose_head=None,
     swap_q: Optional[tuple[tuple[int, int], tuple[int, int]]] = None,
@@ -103,16 +85,10 @@ def construct_circuit(
         device=DEVICE, dtype=torch.float32
     )
 
-    # split by heads
-    if make_pth_true_prev or make_pth_beg_attend or make_pth_zero or make_pth_diag or split_with_projection:
-        split_heads = "all"
-    assert split_heads in list(split_head_configs.keys())
-    split_head_config = split_head_configs[split_heads]
-
     by_head = configure_transformer(
         loss.get_unique("t.bind_w"),
         to=To.ATTN_HEAD_MLP_NORM,
-        split_by_head_config=split_head_config,
+        split_by_head_config={0: [(i, f"head{i}") for i in range(8)], 1: [(i, f"head{i}") for i in range(8)]},
         use_pull_up_head_split=True,
         check_valid=True,
     )
@@ -129,6 +105,10 @@ def construct_circuit(
         .update(rc.Regex(r".*?norm_call.*?"), lambda c: c.cast_module().substitute())
         .update(rc.Regex(r"\d\.a\."), lambda c: c.cast_module().substitute() if isinstance(c, rc.Module) else c)
     )
+
+    if sub_all:
+        model = rc.substitute_all_modules(model)
+        #model.print_html(rc.PrintHtmlOptions(traversal=True))
 
     # FURTHER MODIFICATIONS
 
@@ -259,8 +239,7 @@ def construct_circuit(
         model = model.update(q(*flip), lambda x: k_w)
         model = model.update(k(*flip), lambda x: q_w)
 
-    if split_with_projection:
-        model = rc.substitute_all_modules(model)
+    # split node with projection matrix
     for m, proj_name in split_with_projection:
         transform = partial(utils.split_circuit_with_projection, proj_name)
         model = model.update(m, lambda c: transform(c))

@@ -59,9 +59,9 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
     # either get attention probs or losses
     if get_attns or get_attn_scores:
         # first sample (for computability), then substitute to subtrees are computable
-        check = "a.attn_probs" if get_attns else "a.attn_scores"
         sampler = eval_settings.get_sampler(len(scrubbed_circuit.ref_ds), scrubbed_circuit.group)
         circ = rc.substitute_all_modules(sampler.sample(scrubbed_circuit.circuit))
+        check = "a.attn_probs_sample" if get_attns else "a.attn_scores_sample"
 
         # collect attn scores for each head
         res = []
@@ -112,6 +112,7 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
     if verbose > 0:
         print("Building induction candidates masks")
 
+    evals_dict = {"exp name": exp_name}
     if not get_attns and not get_attn_scores:
         # calculated masked losses
         eval_scores = []
@@ -126,7 +127,6 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
             ("CANDIDATE ERB", all_masks["candidate_erb"]),
             ("NFERB UR", all_masks["nferb_uncommon_repeats"]),
         ]
-        evals_dict = {"exp name": exp_name}
         for eval_name, mask in evals:
             if verbose > -1:
                 print(eval_name)
