@@ -244,6 +244,16 @@ def make_experiments(
             + [ind_head.children_matcher({2}).chain(m(i)) for i in [1, 2, 3, 4, 5, 7]]
         )
 
+    res["positional-ev"] = make_corr(
+        [ind_heads.chain(rc.Matcher("left_input_toks_int"))],
+        options={"split_ind_values_by_position": True}
+    )
+
+    res["positional-eq"] = make_corr(
+        [ind_heads.chain(rc.Matcher("left_input_toks_int"))],
+        options={"split_ind_queries_by_position": True}
+    )
+
     res["real-0.0"] = make_corr(options={"make_pth_true_prev": [0, 1, 2, 3, 4, 5, 6, 7]})
     res["beg-0.0"] = make_corr(options={"make_pth_beg_attend": [0, 1, 2, 3, 4, 5, 6, 7]})
     res["zero-0.0"] = make_corr(options={"make_pth_zero": [0, 1, 2, 3, 4, 5, 6, 7]})

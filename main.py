@@ -43,7 +43,8 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
     if verbose > 0:
         print("Running hypothesis")
     ds = Dataset(arrs={"toks_int_var": toks})
-    eval_settings = ExperimentEvalSettings(device_dtype=DEVICE, batch_size=100, run_on_all=True)
+    optim_settings = rc.OptimizationSettings(scheduling_naive=True) if "positional" in exp_name else rc.OptimizationSettings()
+    eval_settings = ExperimentEvalSettings(device_dtype=DEVICE, batch_size=100, run_on_all=True, optim_settings=optim_settings)
 
     exp = Experiment(model, ds, corr, num_examples=samples, random_seed=SEED)
     scrubbed_circuit = exp.scrub()

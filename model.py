@@ -13,7 +13,7 @@ from interp.tools.rrfs import RRFS_DIR
 from typing import Optional
 
 DEVICE = "cuda:0"
-seq_len = 300
+SEQ_LEN = 300
 
 
 @torch.inference_mode()
@@ -23,7 +23,7 @@ def load_model_and_data():
 
     P = rc.Parser()
     toks_int_values = P("'toks_int_var' [104091,301] Array 3f36c4ca661798003df14994")
-    toks_int_values = rc.cast_circuit(toks_int_values, rc.TorchDeviceDtypeOp(device=DEVICE, dtype="int64")).cast_array()
+    toks_int_values = rc.cast_circuit(rc.Array(toks_int_values.value[:, :SEQ_LEN+1], name="toks_int_var"), rc.TorchDeviceDtypeOp(device=DEVICE, dtype="int64")).cast_array()
     toks_indices = torch.arange(toks_int_values.shape[0], device=DEVICE).reshape(-1, 1)
     toks_int_values = rc.Array(
         torch.concat([toks_int_values.cast_array().value, toks_indices], dim=1),
@@ -53,13 +53,15 @@ def construct_circuit(
     actual_beg: int = 0,
     make_pth_diag: list = [],
     split_with_projection: list = [],
+    split_ind_values_by_position: bool = False,
+    split_ind_queries_by_position: bool = False,
 ):
     """Load the 2L attn-only model and make circuit that calculates loss on the dataset, with empty inputs"""
 
     orig_circuit, tok_embeds, pos_embeds, tokenizer, extra_args, toks_int_values = load_model_and_data()
 
     # sampling vars
-    toks_int_var = rc.Array(torch.zeros(302, dtype=torch.int64).to(DEVICE), "toks_int_var")
+    toks_int_var = rc.Array(torch.zeros(SEQ_LEN + 2, dtype=torch.int64).to(DEVICE), "toks_int_var")
 
     # input/expected
     input_toks = toks_int_var.index(I[:-2], name="input_toks_int")
@@ -68,10 +70,10 @@ def construct_circuit(
     # feed input tokens to model (after embedding + causal mask)
     idxed_embeds = rc.GeneralFunction.gen_index(tok_embeds, input_toks, index_dim=0, name="idxed_embeds")
     causal_mask = rc.Array(
-        (torch.arange(seq_len)[:, None] >= torch.arange(seq_len)[None, :]).to(tok_embeds.cast_array().value),
+        (torch.arange(SEQ_LEN)[:, None] >= torch.arange(SEQ_LEN)[None, :]).to(tok_embeds.cast_array().value),
         f"t.a.c.causal_mask",
     )
-    pos_embeds = pos_embeds.index(I[:seq_len], name="t.w.pos_embeds_idxed")
+    pos_embeds = pos_embeds.index(I[:SEQ_LEN], name="t.w.pos_embeds_idxed")
     model = rc.module_new_bind(
         orig_circuit, ("t.input", idxed_embeds), ("a.mask", causal_mask), ("a.pos_input", pos_embeds), name="t.call"
     )
@@ -121,7 +123,7 @@ def construct_circuit(
             lambda circ: rc.Einsum.from_einsum_string("rqk -> rkq" if len(circ.shape) == 3 else "qk -> kq", circ),
         )
 
-    prev = ((torch.arange(seq_len)[:, None] - 1) == torch.arange(seq_len)[None, :]).to(tok_embeds.cast_array().value)
+    prev = ((torch.arange(SEQ_LEN)[:, None] - 1) == torch.arange(SEQ_LEN)[None, :]).to(tok_embeds.cast_array().value)
     prev[0, 0] = 1.0
     prev_mask = rc.Array(
         prev,
@@ -138,7 +140,7 @@ def construct_circuit(
             lambda c: prev_mask,
         )
 
-    beg = (torch.arange(seq_len)[None, :] == (torch.zeros((seq_len, seq_len)) + actual_beg)).to(
+    beg = (torch.arange(SEQ_LEN)[None, :] == (torch.zeros((SEQ_LEN, SEQ_LEN)) + actual_beg)).to(
         tok_embeds.cast_array().value
     )
     beg_mask = rc.Array(
@@ -155,7 +157,7 @@ def construct_circuit(
             lambda c: beg_mask,
         )
 
-    zeros = torch.zeros((seq_len, seq_len)).to(tok_embeds.cast_array().value)
+    zeros = torch.zeros((SEQ_LEN, SEQ_LEN)).to(tok_embeds.cast_array().value)
     zeros_mask = rc.Array(
         zeros,
         "a.attn_probs",
@@ -170,7 +172,7 @@ def construct_circuit(
             lambda c: zeros_mask,
         )
 
-    diag = ((torch.arange(seq_len)[:, None]) == torch.arange(seq_len)[None, :]).to(tok_embeds.cast_array().value)
+    diag = ((torch.arange(SEQ_LEN)[:, None]) == torch.arange(SEQ_LEN)[None, :]).to(tok_embeds.cast_array().value)
     diag_mask = rc.Array(
         diag,
         "a.attn_probs",
@@ -243,6 +245,33 @@ def construct_circuit(
     for m, proj_name in split_with_projection:
         transform = partial(utils.split_circuit_with_projection, proj_name)
         model = model.update(m, lambda c: transform(c))
+
+    # split 1.5 and 1.6 value paths by position
+    # This is so we can claim e.g. the value of 1.5 at position i depends solely on the ith token
+    if split_ind_values_by_position:
+        b1_v_matcher = rc.restrict("b1").chain(rc.Matcher(rc.Regex(r"b1\.a\.head[56]"))).chain(rc.restrict("a.v", term_early_at="a.attn_probs", term_if_matches=True))
+        model = model.update(b1_v_matcher.chain(rc.Matcher("b0")),
+                            lambda c: rc.Concat(*[rc.Index(c, I[i:i+1], name=f"b0[{i}]") for i in range(SEQ_LEN)], axis=0, name="b0.concat")
+        )
+        for i in range(SEQ_LEN):
+            input_matcher = rc.Matcher(f"b0[{i}]").chain("input_toks_int")
+            model = model.update(input_matcher, lambda c: rc.Concat(rc.Index(c, I[0:i], name="left_input_toks_int"),
+                                                                    rc.Index(c, I[i:], name="right_input_toks_int"),
+                                                                    axis=0, name="split_input_toks_int"
+            ))
+
+    # split 1.5 and 1.6 query paths by position
+    if split_ind_queries_by_position:
+        b1_v_matcher = rc.restrict("b1").chain(rc.Matcher(rc.Regex(r"b1\.a\.head[56]"))).chain(rc.restrict("a.q", term_early_at="b0"))
+        model = model.update(b1_v_matcher.chain(rc.Matcher("b0")),
+                            lambda c: rc.Concat(*[rc.Index(c, I[i:i+1], name=f"b0[{i}]") for i in range(SEQ_LEN)], axis=0, name="b0.concat")
+        )
+        for i in range(SEQ_LEN):
+            input_matcher = rc.Matcher(f"b0[{i}]").chain("input_toks_int")
+            model = model.update(input_matcher, lambda c: rc.Concat(rc.Index(c, I[0:i], name="left_input_toks_int"),
+                                                                    rc.Index(c, I[i:], name="right_input_toks_int"),
+                                                                    axis=0, name="split_input_toks_int"
+            ))
     return model, good_induction_candidate, tokenizer, toks_int_values
 
 
