@@ -61,41 +61,44 @@ def make_experiments(
 
     # shortcut matchers for useful parts of the graph
     embeds = rc.restrict("idxed_embeds", term_early_at="b0.a")
-    a1_head = ind_heads.chain(rc.restrict("a.head.on_inp", term_if_matches=True))
-    v = a1_head.children_matcher({3})
-    q = a1_head.children_matcher({1})
-    k = a1_head.children_matcher({2})
+    ind_v = ind_heads.chain(rc.restrict(rc.Matcher("a.v"), term_if_matches="b0"))
+    ind_q = ind_heads.chain(rc.restrict(rc.Matcher("a.q"), term_if_matches="b0"))
+    ind_k = ind_heads.chain(rc.restrict(rc.Matcher("a.k"), term_if_matches="b0"))
 
     # UNSCRUBBED
     res["unscrubbed"] = make_corr()
 
+    res["scrub-ind-v"] = make_corr([ind_v])
+    res["scrub-ind-q"] = make_corr([ind_q])
+    res["scrub-ind-k"] = make_corr([ind_k])
+
     # head-k-child head
     for i in range(8):
-        matcher = rc.restrict(rc.Matcher(f"b1.a.head{i}"), term_if_matches=True)
-        res[f"all-1.{i}"] = make_corr([matcher])
-        res[f"all-0.{i}"] = make_corr([m(i)])
+        l1_head = rc.restrict(rc.Matcher(f"b1.a.head{i}"), term_if_matches=True)
+        res[f"scrub-1.{i}"] = make_corr([l1_head])
+        res[f"scrub-0.{i}"] = make_corr([m(i)])
         for ch in ["q", "k", "v"]:
-            ch_matcher = matcher.chain(rc.restrict(rc.Matcher(f"a.{ch}"), end_depth=6))
-            res[f"{ch}-1.{i}"] = make_corr([ch_matcher])
-            res[f"{ch}-1.{i}-emb"] = make_corr([ch_matcher.chain(embeds)])
+            ch_matcher = l1_head.chain(rc.restrict(rc.Matcher(f"a.{ch}"), term_if_matches="b0"))
+            res[f"scrub-{ch}-1.{i}"] = make_corr([ch_matcher])
+            res[f"scrub-{ch}-1.{i}-emb"] = make_corr([ch_matcher.chain(embeds)])
             for j in range(8):
-                res[f"{ch}-1.{i}-0.{j}"] = make_corr([ch_matcher.chain(m(j))])
-                res[f"{ch}-1.{i}-0.{j}e"] = make_corr([ch_matcher.chain(m(j) | embeds)])
-            res[f"{ch}-1.{i}-0.06"] = make_corr([ch_matcher.chain(m(0, 6))])
-            res[f"{ch}-1.{i}-0.47"] = make_corr([ch_matcher.chain(m(4, 7))])
-            res[f"{ch}-1.{i}-0.0647"] = make_corr([ch_matcher.chain(m(0, 6, 4, 7))])
-            res[f"{ch}-1.{i}-0.1235"] = make_corr([ch_matcher.chain(m(1, 2, 3, 5))])
-            res[f"{ch}-1.{i}-0.1235e"] = make_corr([ch_matcher.chain(m(1, 2, 3, 5) | embeds)])
-            res[f"{ch}-1.{i}-0.1235e-split"] = make_corr(
+                res[f"scrub-{ch}-1.{i}-0.{j}"] = make_corr([ch_matcher.chain(m(j))])
+                res[f"scrub-{ch}-1.{i}-0.{j}e"] = make_corr([ch_matcher.chain(m(j) | embeds)])
+            res[f"scrub-{ch}-1.{i}-0.06"] = make_corr([ch_matcher.chain(m(0, 6))])
+            res[f"scrub-{ch}-1.{i}-0.47"] = make_corr([ch_matcher.chain(m(4, 7))])
+            res[f"scrub-{ch}-1.{i}-0.0647"] = make_corr([ch_matcher.chain(m(0, 6, 4, 7))])
+            res[f"scrub-{ch}-1.{i}-0.1235"] = make_corr([ch_matcher.chain(m(1, 2, 3, 5))])
+            res[f"scrub-{ch}-1.{i}-0.1235e"] = make_corr([ch_matcher.chain(m(1, 2, 3, 5) | embeds)])
+            res[f"scrub-{ch}-1.{i}-0.1235e-split"] = make_corr(
                 [ch_matcher.chain(x) for x in [m(1), m(2), m(3), m(5), embeds]]
             )
-            res[f"{ch}-1.{i}-0.123457"] = make_corr([ch_matcher.chain(m(1, 2, 3, 4, 5, 7))])
-            res[f"{ch}-1.{i}-0.123457e"] = make_corr([ch_matcher.chain(m(1, 2, 3, 4, 5, 7) | embeds)])
-            res[f"{ch}-1.{i}-0.1234567e"] = make_corr([ch_matcher.chain(m(1, 2, 3, 4, 5, 6, 7) | embeds)])
-            res[f"{ch}-1.{i}-0.012356e"] = make_corr([ch_matcher.chain(m(0, 1, 2, 3, 5, 6) | embeds)])
-            res[f"{ch}-1.{i}-0"] = make_corr([ch_matcher.chain(m(0, 1, 2, 3, 4, 5, 6, 7))])
+            res[f"scrub-{ch}-1.{i}-0.123457"] = make_corr([ch_matcher.chain(m(1, 2, 3, 4, 5, 7))])
+            res[f"scrub-{ch}-1.{i}-0.123457e"] = make_corr([ch_matcher.chain(m(1, 2, 3, 4, 5, 7) | embeds)])
+            res[f"scrub-{ch}-1.{i}-0.1234567e"] = make_corr([ch_matcher.chain(m(1, 2, 3, 4, 5, 6, 7) | embeds)])
+            res[f"scrub-{ch}-1.{i}-0.012356e"] = make_corr([ch_matcher.chain(m(0, 1, 2, 3, 5, 6) | embeds)])
+            res[f"scrub-{ch}-1.{i}-0"] = make_corr([ch_matcher.chain(m(0, 1, 2, 3, 4, 5, 6, 7))])
         for j in range(8):
-            res[f"1.{i}-0.{j}"] = make_corr([matcher.chain(m(j))])
+            res[f"scrub-1.{i}-0.{j}"] = make_corr([l1_head.chain(m(j))])
 
     # tranpose
     res["a1-ind-transpose"] = make_corr(options={"transpose_head": "a1.ind"})
@@ -121,110 +124,43 @@ def make_experiments(
     res["not-baseline-full"] = make_corr(
         [non_ind_heads | rc.IterativeMatcher(rc.restrict("b0", term_early_at="b1.a"))]
     )
-    for i in range(8):
-        res[f"scrub-0.{i}"] = make_corr([m(i)])
-        res[f"scrub-0.{i}-decoherent"] = make_corr([rc.IterativeMatcher(f"b1.a.head{j}").chain(m(i)) for j in range(8)])
-        res[f"scrub-1-0.{i}"] = make_corr([rc.IterativeMatcher("b1.a").chain(m(i))])
-        res[f"scrub-resid-0.{i}"] = make_corr([rc.IterativeMatcher(rc.restrict(m(i), term_early_at="b1.a"))])
-        res[f"scrub-1.{i}"] = make_corr([rc.IterativeMatcher(f"b1.a.head{i}")])
-
-    res[f"resid-0"] = make_corr([rc.IterativeMatcher(rc.restrict("b0", term_early_at="b1.a"))])
-    res[f"resid-0-indiv"] = make_corr(
-        [rc.IterativeMatcher(rc.restrict(m(i), term_early_at="b1.a")) for i in range(8)]
-    )
-    res[f"resid-0-prev"] = make_corr([rc.IterativeMatcher(rc.restrict(m(0, 6), term_early_at="b1.a"))])
-    res[f"resid-0-begin"] = make_corr([rc.IterativeMatcher(rc.restrict(m(4, 7), term_early_at="b1.a"))])
-    res[f"resid-0-diag"] = make_corr([rc.IterativeMatcher(rc.restrict(m(1, 2, 3, 5), term_early_at="b1.a"))])
 
     # EMBEDDING-VALUE
-    ev = v.chain("b0.a")
-
-    res["v"] = make_corr([v])
+    ev = ind_v.chain("b0.a")
     res["ev"] = make_corr([ev])
-    res["not-ev"] = make_corr([v.chain(embeds)])
+    res["not-ev"] = make_corr([ind_v.chain(embeds)])
 
     # scrub each head individually
     for i in range(8):
-        res[f"a0-v-{i}"] = make_corr([v.chain(embeds | m(i))])
-        res[f"a0-v-only-{i}"] = make_corr([v.chain(m(i))])
-
-    # scrub all heads ind.
-    res[f"a0-v-indep"] = make_corr([v.chain(m(i)) for i in range(8)] + [v.chain(embeds)])
-    res[f"a0-v-indep-only"] = make_corr([v.chain(m(i)) for i in range(8)])
-
-    # scrub subsets of heads
-    res[f"a0-v-0,6"] = make_corr([v.chain(embeds | m(0, 6))])
-    res[f"ev+"] = make_corr([v.chain(m(0, 4, 6, 7))])
-    res[f"ev+-decoherent"] = make_corr([v.chain(m(0)), v.chain(m(4)), v.chain(m(6)), v.chain(m(7))])
-    res[f"a0-v-only0,6"] = make_corr([v.chain(m(0, 6))])
-    res[f"a0-v-only016"] = make_corr([v.chain(m(0, 1, 6))])
-    res[f"a0-v-not0,6"] = make_corr([v.chain(embeds | m(1, 2, 3, 4, 5, 7))])
-    res[f"a0-v-onlynot0,6"] = make_corr([v.chain(m(1, 2, 3, 4, 5, 7))])
-    res[f"a0-v-all-bad-but-2"] = make_corr([v.chain(embeds | m(1, 3, 4, 5, 7))])
-    res[f"a0-v-all-bad-but-12"] = make_corr([v.chain(embeds | m(3, 4, 5, 7))])
+        res[f"scrub-v-ind-0.{i}"] = make_corr([ind_v.chain(m(i))])
+        res[f"scrub-v-ind-0.{i}e"] = make_corr([ind_v.chain(embeds | m(i))])
 
     # EMBEDDING-QUERY
-    eq = q.chain("b0.a")
-    res["q"] = make_corr([q])
+    eq = ind_q.chain("b0.a")
     res["eq"] = make_corr([eq])
-    res["not-eq"] = make_corr([q.chain(embeds)])
+    res["not-eq"] = make_corr([ind_q.chain(embeds)])
 
     # scrub each head individually
     for i in range(8):
-        res[f"a0-q-{i}"] = make_corr([q.chain(embeds | m(i))])
-        res[f"a0-q-only-{i}"] = make_corr([q.chain(m(i))])
-
-    # scrub all heads ind.
-    res[f"a0-q-indep"] = make_corr([q.chain(m(i)) for i in range(8)] + [q.chain(embeds)])
-    res[f"a0-q-indep-only"] = make_corr([q.chain(m(i)) for i in range(8)])
-    res[f"a0-q-indep-125"] = make_corr([q.chain(m(i)) for i in [2, 5, 1]])
-    res[f"a0-q-indep-1235"] = make_corr([q.chain(m(i)) for i in [2, 5, 1, 3]])
-    res[f"a0-q-indep-12356"] = make_corr([q.chain(m(i)) for i in [2, 5, 1, 3, 6]])
-
-    # scrub subsets of heads
-    res[f"a0-q-only-56"] = make_corr([q.chain(m(5, 6))])
-    res[f"eq+"] = make_corr([q.chain(m(0, 4, 6, 7))])
-    res[f"eq+-decoherent"] = make_corr([q.chain(embeds), q.chain(m(0)), q.chain(m(4)), q.chain(m(6)), q.chain(m(7))])
+        res[f"scrub-q-ind-0.{i}"] = make_corr([ind_q.chain(m(i))])
+        res[f"scrub-q-ind-0.{i}e"] = make_corr([ind_q.chain(embeds | m(i))])
 
     # EMBEDDING-KEY
-    res["k"] = make_corr([k])
-    res["ek"] = make_corr([k.chain("b0.a")])
-    res["not-ek"] = make_corr([k.chain(embeds)])
+    ek = ind_k.chain("b0.a")
+    res["ek"] = make_corr([ek])
+    res["not-ek"] = make_corr([ind_k.chain(embeds)])
 
     # PREVIOUS-TOKEN-HEAD KEY
-    pth_k = k.chain(embeds | rc.Regex(r"\.*not_prev\.*"))
+    pth_k = ind_k.chain(embeds | m(1, 2, 3, 4, 5, 6, 7))
     res["pth-k"] = make_corr([pth_k])
     res["pth-k-full"] = make_corr(
         [
             pth_k
-            | k.chain("a.attn_probs * a.not_prev_tok_mask")
-            | k.chain("a.attn_probs * a.prev_tok_mask").chain("a.attn_probs")
+            | ind_k.chain("a.attn_probs * a.not_prev_tok_mask")
+            | ind_k.chain("a.attn_probs * a.prev_tok_mask").chain("a.attn_probs")
         ],
         options={"split_pth_ov_by_pt_or_not": True},
     )
-    res["not-pth-k"] = make_corr([k.chain(embeds | rc.Regex(r"\.*yes_prev\.*"))])
-    res["pth-k-fine"] = make_corr([k.chain(rc.Regex(r"\.*not_prev\.*"))])
-    res["not-pth-k-emb"] = make_corr([k.chain(embeds | rc.Regex(r"\.*yes_prev\.*"))])
-
-    # include 0.6 also
-    res["not-pth-k-emb-06"] = make_corr([k.chain(embeds | m(0, 6))])
-    res["not-pth-k-06"] = make_corr([k.chain(m(0, 6))])
-    res["not-pth-k-6"] = make_corr([k.chain(m(6))])
-    res["not-pth-k-7"] = make_corr([k.chain(m(7))])
-    res["not-pth-unimp"] = make_corr([k.chain(m(1, 2, 3, 4, 5, 7))])
-    res["pth-k+"] = make_corr([k.chain(embeds | m(1, 2, 3, 4, 5, 7))])
-    res["1.5-pth-k"] = make_corr([rc.IterativeMatcher("b1.a.head5").children_matcher({0}).children_matcher({2}).chain(embeds | m(1, 2, 3, 4, 5, 6, 7))])
-    res["1.6-pth-k"] = make_corr([rc.IterativeMatcher("b1.a.head6").children_matcher({0}).children_matcher({2}).chain(embeds | m(1, 2, 3, 4, 5, 6, 7))])
-    res["1.5-pth-k+"] = make_corr([rc.IterativeMatcher("b1.a.head5").children_matcher({0}).children_matcher({2}).chain(embeds | m(1, 2, 3, 4, 5, 7))])
-    res["1.6-pth-k+"] = make_corr([rc.IterativeMatcher("b1.a.head6").children_matcher({0}).children_matcher({2}).chain(embeds | m(1, 2, 3, 4, 5, 7))])
-    res["1.5-not-pth-k+"] = make_corr([rc.IterativeMatcher("b1.a.head5").children_matcher({0}).children_matcher({2}).chain(m(0, 6))])
-    res["1.5-e1235k"] = make_corr([rc.IterativeMatcher("b1.a.head5").children_matcher({0}).children_matcher({2}).chain(m(0, 4, 6, 7))])
-    res["1.5-e123456k"] = make_corr([rc.IterativeMatcher("b1.a.head5").children_matcher({0}).children_matcher({2}).chain(m(0, 7))])
-    res["1.5-ek"] = make_corr([rc.IterativeMatcher("b1.a.head5").children_matcher({0}).children_matcher({2}).chain(m(0, 1, 2, 3, 4, 5, 6, 7))])
-    res["1.6-ek"] = make_corr([rc.IterativeMatcher("b1.a.head6").children_matcher({0}).children_matcher({2}).chain(m(0, 1, 2, 3, 4, 5, 6, 7))])
-
-    # PTH-QUERY
-    res["pth-q"] = make_corr([q.chain(embeds | rc.Regex(r"\.*not_prev\.*"))])
 
     # ALL (3 og scrubbing)
     res["all"] = make_corr([ev | eq | pth_k])
@@ -246,12 +182,77 @@ def make_experiments(
 
     res["positional-ev"] = make_corr(
         [ind_heads.chain(rc.Matcher("left_input_toks_int"))],
-        options={"split_ind_values_by_position": True}
+        options={"split_paths_by_position": [
+            (5, "v", [0, 1, 2, 3, 4, 5, 6, 7], 1),
+            (6, "v", [0, 1, 2, 3, 4, 5, 6, 7], 1),
+        ]}
     )
 
     res["positional-eq"] = make_corr(
         [ind_heads.chain(rc.Matcher("left_input_toks_int"))],
-        options={"split_ind_queries_by_position": True}
+        options={"split_paths_by_position": [
+            (5, "q", [0, 1, 2, 3, 4, 5, 6, 7], 1),
+            (6, "q", [0, 1, 2, 3, 4, 5, 6, 7], 1),
+        ]}
+    )
+
+    res["positional-ek"] = make_corr(
+        [ind_heads.chain(rc.Matcher("left_input_toks_int"))],
+        options={"split_paths_by_position": [
+            (5, "k", [0, 1, 2, 3, 4, 5, 6, 7], 1),
+            (6, "k", [0, 1, 2, 3, 4, 5, 6, 7], 1),
+        ]}
+    )
+
+    res["pth-k+-with-positional-ek"] = make_corr(
+        [ind_heads.chain(rc.Matcher("left_input_toks_int"))],
+        options={"split_paths_by_position": [
+            (5, "k", [1, 2, 3, 4, 5, 7], 1),
+            (6, "k", [1, 2, 3, 4, 5, 7], 1),
+        ]}
+    )
+
+    res["pth-k+-with-positional-ek-no-47"] = make_corr(
+        [
+            (
+                ind_heads.chain(rc.Matcher("left_input_toks_int")) |
+                ind_k.chain(rc.Regex("b0.a.head[47]"))
+            ),
+        ],
+        options={"split_paths_by_position": [
+            (5, "k", [1, 2, 3, 5], 1),
+            (6, "k", [1, 2, 3, 5], 1),
+        ]}
+    )
+
+    res["positional-pth-k+-with-positional-ek-no-47"] = make_corr(
+        [
+            (
+                ind_heads.chain(rc.Matcher("left_input_toks_int")) |
+                ind_k.chain(rc.Regex("b0.a.head[47]"))
+            ),
+        ],
+        options={"split_paths_by_position": [
+            (5, "k", [1, 2, 3, 5], 1),
+            (5, "k", [0, 6], 3),
+            (6, "k", [1, 2, 3, 5], 1),
+            (6, "k", [0, 6], 3),
+        ]}
+    )
+
+    res["positional-pth-k+-with-positional-1.5-ek-no-47"] = make_corr(
+        [
+            (
+                ind_heads.chain(rc.Matcher("left_input_toks_int")) |
+                rc.Matcher("b1.a.head5").chain(rc.restrict("a.k", term_early_at="b0")).chain(rc.Regex("b0.a.head[47]")) |
+                rc.Matcher("b1.a.head6").chain(rc.restrict("a.k", term_early_at="b0")).chain(rc.Regex("b0.a.head[123457]"))
+            ),
+        ],
+        options={"split_paths_by_position": [
+            (5, "k", [1, 2, 3, 5], 1),
+            (5, "k", [0, 6], 3),
+            (6, "k", [0, 6], 3),
+        ]}
     )
 
     res["real-0.0"] = make_corr(options={"make_pth_true_prev": [0, 1, 2, 3, 4, 5, 6, 7]})

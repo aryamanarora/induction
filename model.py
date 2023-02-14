@@ -53,8 +53,7 @@ def construct_circuit(
     actual_beg: int = 0,
     make_pth_diag: list = [],
     split_with_projection: list = [],
-    split_ind_values_by_position: bool = False,
-    split_ind_queries_by_position: bool = False,
+    split_paths_by_position: list = [],
 ):
     """Load the 2L attn-only model and make circuit that calculates loss on the dataset, with empty inputs"""
 
@@ -246,32 +245,32 @@ def construct_circuit(
         transform = partial(utils.split_circuit_with_projection, proj_name)
         model = model.update(m, lambda c: transform(c))
 
-    # split 1.5 and 1.6 value paths by position
+    # Split paths by position
     # This is so we can claim e.g. the value of 1.5 at position i depends solely on the ith token
-    if split_ind_values_by_position:
-        b1_v_matcher = rc.restrict("b1").chain(rc.Matcher(rc.Regex(r"b1\.a\.head[56]"))).chain(rc.restrict("a.v", term_early_at="a.attn_probs", term_if_matches=True))
-        model = model.update(b1_v_matcher.chain(rc.Matcher("b0")),
-                            lambda c: rc.Concat(*[rc.Index(c, I[i:i+1], name=f"b0[{i}]") for i in range(SEQ_LEN)], axis=0, name="b0.concat")
-        )
-        for i in range(SEQ_LEN):
-            input_matcher = rc.Matcher(f"b0[{i}]").chain("input_toks_int")
-            model = model.update(input_matcher, lambda c: rc.Concat(rc.Index(c, I[0:i], name="left_input_toks_int"),
-                                                                    rc.Index(c, I[i:], name="right_input_toks_int"),
-                                                                    axis=0, name="split_input_toks_int"
-            ))
+    # The format is that for each l1 head we want to split some path for, we specify which child
+    # (value, query, key), which l0 heads we want to split for, and how many of the most recent
+    # tokens we want to include.
+    # So for the above example, we should have (5, "v", [0, 1, 2, 3, 4, 5, 6, 7], 1).
+    # To split for multiple children, add another tuple with the same l1 head.
+    split_children = set()
+    split_inputs = set()
+    for l1h, child, l0hs, num_toks_back in split_paths_by_position:
+        child_matcher = rc.restrict("b1").chain(rc.Matcher(rc.Regex(r"b1\.a\.head" + str(l1h)))).chain(rc.restrict(f"a.{child}", term_early_at="b0", term_if_matches=True))
+        if (l1h, child) not in split_children:
+            model = model.update(child_matcher.chain(rc.Matcher("b0")),
+                                lambda c: rc.Concat(*[rc.Index(c, I[i:i+1], name=f"b0[{i}]") for i in range(SEQ_LEN)], axis=0, name="b0.concat")
+            )
+            split_children.add((l1h, child))
+        for h in l0hs:
+            assert (l1h, child, h) not in split_inputs
+            for i in range(SEQ_LEN):
+                input_matcher = child_matcher.chain(rc.Matcher(f"b0[{i}]")).chain(f"b0.a.head{h}").chain("input_toks_int")
+                model = model.update(input_matcher, lambda c: rc.Concat(rc.Index(c, I[:i-(num_toks_back-1)], name="left_input_toks_int"),
+                                                                        rc.Index(c, I[i-(num_toks_back-1):], name="right_input_toks_int"),
+                                                                        axis=0, name="split_input_toks_int"
+                ))
+            split_inputs.add((l1h, child, h))
 
-    # split 1.5 and 1.6 query paths by position
-    if split_ind_queries_by_position:
-        b1_v_matcher = rc.restrict("b1").chain(rc.Matcher(rc.Regex(r"b1\.a\.head[56]"))).chain(rc.restrict("a.q", term_early_at="b0"))
-        model = model.update(b1_v_matcher.chain(rc.Matcher("b0")),
-                            lambda c: rc.Concat(*[rc.Index(c, I[i:i+1], name=f"b0[{i}]") for i in range(SEQ_LEN)], axis=0, name="b0.concat")
-        )
-        for i in range(SEQ_LEN):
-            input_matcher = rc.Matcher(f"b0[{i}]").chain("input_toks_int")
-            model = model.update(input_matcher, lambda c: rc.Concat(rc.Index(c, I[0:i], name="left_input_toks_int"),
-                                                                    rc.Index(c, I[i:], name="right_input_toks_int"),
-                                                                    axis=0, name="split_input_toks_int"
-            ))
     return model, good_induction_candidate, tokenizer, toks_int_values
 
 
