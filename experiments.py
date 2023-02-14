@@ -181,77 +181,77 @@ def make_experiments(
         )
 
     res["positional-ev"] = make_corr(
-        [ind_heads.chain(rc.Matcher("left_input_toks_int"))],
+        [ind_heads.chain(rc.Matcher("outside_input_toks_int"))],
         options={"split_paths_by_position": [
-            (5, "v", [0, 1, 2, 3, 4, 5, 6, 7], 1),
-            (6, "v", [0, 1, 2, 3, 4, 5, 6, 7], 1),
+            (5, "v", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
+            (6, "v", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
         ]}
     )
 
     res["positional-eq"] = make_corr(
-        [ind_heads.chain(rc.Matcher("left_input_toks_int"))],
+        [ind_heads.chain(rc.Matcher("outside_input_toks_int"))],
         options={"split_paths_by_position": [
-            (5, "q", [0, 1, 2, 3, 4, 5, 6, 7], 1),
-            (6, "q", [0, 1, 2, 3, 4, 5, 6, 7], 1),
+            (5, "q", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
+            (6, "q", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
         ]}
     )
 
     res["positional-ek"] = make_corr(
-        [ind_heads.chain(rc.Matcher("left_input_toks_int"))],
+        [ind_heads.chain(rc.Matcher("outside_input_toks_int"))],
         options={"split_paths_by_position": [
-            (5, "k", [0, 1, 2, 3, 4, 5, 6, 7], 1),
-            (6, "k", [0, 1, 2, 3, 4, 5, 6, 7], 1),
+            (5, "k", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
+            (6, "k", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
         ]}
     )
 
     res["pth-k+-with-positional-ek"] = make_corr(
-        [ind_heads.chain(rc.Matcher("left_input_toks_int"))],
+        [ind_heads.chain(rc.Matcher("outside_input_toks_int"))],
         options={"split_paths_by_position": [
-            (5, "k", [1, 2, 3, 4, 5, 7], 1),
-            (6, "k", [1, 2, 3, 4, 5, 7], 1),
+            (5, "k", [1, 2, 3, 4, 5, 7], 0, 1),
+            (6, "k", [1, 2, 3, 4, 5, 7], 0, 1),
         ]}
     )
 
     res["pth-k+-with-positional-ek-no-47"] = make_corr(
         [
             (
-                ind_heads.chain(rc.Matcher("left_input_toks_int")) |
+                ind_heads.chain(rc.Matcher("outside_input_toks_int")) |
                 ind_k.chain(rc.Regex("b0.a.head[47]"))
             ),
         ],
         options={"split_paths_by_position": [
-            (5, "k", [1, 2, 3, 5], 1),
-            (6, "k", [1, 2, 3, 5], 1),
+            (5, "k", [1, 2, 3, 5], 0, 1),
+            (6, "k", [1, 2, 3, 5], 0, 1),
         ]}
     )
 
     res["positional-pth-k+-with-positional-ek-no-47"] = make_corr(
         [
             (
-                ind_heads.chain(rc.Matcher("left_input_toks_int")) |
+                ind_heads.chain(rc.Matcher("outside_input_toks_int")) |
                 ind_k.chain(rc.Regex("b0.a.head[47]"))
             ),
         ],
         options={"split_paths_by_position": [
-            (5, "k", [1, 2, 3, 5], 1),
-            (5, "k", [0, 6], 3),
-            (6, "k", [1, 2, 3, 5], 1),
-            (6, "k", [0, 6], 3),
+            (5, "k", [1, 2, 3, 5], 0, 1),
+            (5, "k", [0, 6], 2, 3),
+            (6, "k", [1, 2, 3, 5], 0, 1),
+            (6, "k", [0, 6], 2, 3),
         ]}
     )
 
     res["positional-pth-k+-with-positional-1.5-ek-no-47"] = make_corr(
         [
             (
-                ind_heads.chain(rc.Matcher("left_input_toks_int")) |
+                ind_heads.chain(rc.Matcher("outside_input_toks_int")) |
                 rc.Matcher("b1.a.head5").chain(rc.restrict("a.k", term_early_at="b0")).chain(rc.Regex("b0.a.head[47]")) |
                 rc.Matcher("b1.a.head6").chain(rc.restrict("a.k", term_early_at="b0")).chain(rc.Regex("b0.a.head[123457]"))
             ),
         ],
         options={"split_paths_by_position": [
-            (5, "k", [1, 2, 3, 5], 1),
-            (5, "k", [0, 6], 3),
-            (6, "k", [0, 6], 3),
+            (5, "k", [1, 2, 3, 5], 0, 1),
+            (5, "k", [0, 6], 2, 3),
+            (6, "k", [0, 6], 2, 3),
         ]}
     )
 

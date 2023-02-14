@@ -248,25 +248,30 @@ def construct_circuit(
     # Split paths by position
     # This is so we can claim e.g. the value of 1.5 at position i depends solely on the ith token
     # The format is that for each l1 head we want to split some path for, we specify which child
-    # (value, query, key), which l0 heads we want to split for, and how many of the most recent
-    # tokens we want to include.
-    # So for the above example, we should have (5, "v", [0, 1, 2, 3, 4, 5, 6, 7], 1).
+    # (value, query, or key), which l0 heads we want to split for, how many tokens back to start
+    # splitting for, and how many tokens to include in the split.
+    # So for the above example, we should have (5, "v", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1).
+    # To include only the tokens at position i-1 and i-2 for the keys of head 6, we could write
+    # (6, "k", [0, 1, 2, 3, 4, 5, 6, 7], 2, 2)
     # To split for multiple children, add another tuple with the same l1 head.
     split_children = set()
     split_inputs = set()
-    for l1h, child, l0hs, num_toks_back in split_paths_by_position:
+    for l1h, child, l0hs, num_toks_back, num_toks_to_include in split_paths_by_position:
         child_matcher = rc.restrict("b1").chain(rc.Matcher(rc.Regex(r"b1\.a\.head" + str(l1h)))).chain(rc.restrict(f"a.{child}", term_early_at="b0", term_if_matches=True))
         if (l1h, child) not in split_children:
             model = model.update(child_matcher.chain(rc.Matcher("b0")),
                                 lambda c: rc.Concat(*[rc.Index(c, I[i:i+1], name=f"b0[{i}]") for i in range(SEQ_LEN)], axis=0, name="b0.concat")
             )
             split_children.add((l1h, child))
+        left_boundary = i - num_toks_back
+        right_boundary = left_boundary + num_toks_to_include
         for h in l0hs:
             assert (l1h, child, h) not in split_inputs
             for i in range(SEQ_LEN):
                 input_matcher = child_matcher.chain(rc.Matcher(f"b0[{i}]")).chain(f"b0.a.head{h}").chain("input_toks_int")
-                model = model.update(input_matcher, lambda c: rc.Concat(rc.Index(c, I[:i-(num_toks_back-1)], name="left_input_toks_int"),
-                                                                        rc.Index(c, I[i-(num_toks_back-1):], name="right_input_toks_int"),
+                model = model.update(input_matcher, lambda c: rc.Concat(rc.Index(c, I[:left_boundary], name="outside_input_toks_int"),
+                                                                        rc.Index(c, I[left_boundary:right_boundary], name="inside_input_toks_int"),
+                                                                        rc.Index(c, I[right_boundary:], name="outside_input_toks_int"),
                                                                         axis=0, name="split_input_toks_int"
                 ))
             split_inputs.add((l1h, child, h))
