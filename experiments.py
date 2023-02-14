@@ -61,9 +61,9 @@ def make_experiments(
 
     # shortcut matchers for useful parts of the graph
     embeds = rc.restrict("idxed_embeds", term_early_at="b0.a")
-    ind_v = ind_heads.chain(rc.restrict(rc.Matcher("a.v"), term_if_matches="b0"))
-    ind_q = ind_heads.chain(rc.restrict(rc.Matcher("a.q"), term_if_matches="b0"))
-    ind_k = ind_heads.chain(rc.restrict(rc.Matcher("a.k"), term_if_matches="b0"))
+    ind_v = ind_heads.chain(rc.restrict(rc.Matcher("a.v"), term_early_at="b0"))
+    ind_q = ind_heads.chain(rc.restrict(rc.Matcher("a.q"), term_early_at="b0"))
+    ind_k = ind_heads.chain(rc.restrict(rc.Matcher("a.k"), term_early_at="b0"))
 
     # UNSCRUBBED
     res["unscrubbed"] = make_corr()
@@ -78,7 +78,7 @@ def make_experiments(
         res[f"scrub-1.{i}"] = make_corr([l1_head])
         res[f"scrub-0.{i}"] = make_corr([m(i)])
         for ch in ["q", "k", "v"]:
-            ch_matcher = l1_head.chain(rc.restrict(rc.Matcher(f"a.{ch}"), term_if_matches="b0"))
+            ch_matcher = l1_head.chain(rc.restrict(rc.Matcher(f"a.{ch}"), term_early_at="b0"))
             res[f"scrub-{ch}-1.{i}"] = make_corr([ch_matcher])
             res[f"scrub-{ch}-1.{i}-emb"] = make_corr([ch_matcher.chain(embeds)])
             for j in range(8):

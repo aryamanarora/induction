@@ -263,11 +263,11 @@ def construct_circuit(
                                 lambda c: rc.Concat(*[rc.Index(c, I[i:i+1], name=f"b0[{i}]") for i in range(SEQ_LEN)], axis=0, name="b0.concat")
             )
             split_children.add((l1h, child))
-        left_boundary = i - num_toks_back
-        right_boundary = left_boundary + num_toks_to_include
         for h in l0hs:
             assert (l1h, child, h) not in split_inputs
             for i in range(SEQ_LEN):
+                left_boundary = max(i - num_toks_back, 0)
+                right_boundary = i - num_toks_back + num_toks_to_include
                 input_matcher = child_matcher.chain(rc.Matcher(f"b0[{i}]")).chain(f"b0.a.head{h}").chain("input_toks_int")
                 model = model.update(input_matcher, lambda c: rc.Concat(rc.Index(c, I[:left_boundary], name="outside_input_toks_int"),
                                                                         rc.Index(c, I[left_boundary:right_boundary], name="inside_input_toks_int"),
