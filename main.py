@@ -7,6 +7,8 @@ import csv
 
 import torch
 
+from tqdm import tqdm
+
 from masks import get_all_masks
 import rust_circuit as rc
 from interp.circuit.causal_scrubbing.hypothesis import Correspondence
@@ -28,7 +30,7 @@ def get_inputs_from_model(model: rc.Circuit):
 
 
 @torch.inference_mode()
-def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_attns=False, get_attn_scores=False):
+def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_attns=False, get_attn_scores=False, positional_scrub=False):
     """Run a scrubbing experiments.
     Inputs:
     - exps: A dictionary of experiment names mapped to correspondences and options.
@@ -38,14 +40,55 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
     - verbose: How much to print during experiment."""
     corr, options, _ = exps[exp_name]
     options = options or {}
-    model, _, tokenizer, toks = construct_circuit(**options)
 
     if verbose > 0:
         print("Running hypothesis")
-    ds = Dataset(arrs={"toks_int_var": toks})
-    optim_settings = rc.OptimizationSettings(scheduling_naive=True) if "positional" in exp_name else rc.OptimizationSettings()
-    eval_settings = ExperimentEvalSettings(device_dtype=DEVICE, batch_size=100, run_on_all=True, optim_settings=optim_settings)
 
+    # In a positional scrub, model building takes a very long time, so we want to load a saved model if possible
+    model, _, tokenizer, toks = construct_circuit(**options, save_name=(exp_name if positional_scrub else ""))
+    ds = Dataset(arrs={"toks_int_var": toks})
+
+    if positional_scrub:
+        # Positional scrubs need to be manually batched and repeatedly saved to disk, as the process is
+        # likely to die before the completion of the experiment.
+        seed = SEED
+        eval_settings = ExperimentEvalSettings(
+            device_dtype=DEVICE,
+            batch_size=4,
+            run_on_all=True,
+            optim_settings=rc.OptimizationSettings(scheduling_naive=True)
+        )
+        for i in tqdm(range(100)):
+            try:
+                with open(f"results/positional_scrubs/{exp_name}_{i}.pkl", "rb") as f:
+                    print("Skipping", i)
+                    seed += 1
+                    continue
+            except FileNotFoundError:
+                pass
+            exp = Experiment(model, ds, corr, num_examples=100, random_seed=seed)
+            scrubbed_circuit = exp.scrub()
+
+            inps = get_inputs_from_model(scrubbed_circuit.circuit)
+            inp_ixes = inps[:, -1]
+            res = scrubbed_circuit.evaluate(eval_settings)
+            with open(f"results/positional_scrubs/{exp_name}_{i}.pkl", "wb") as f:
+                pickle.dump((res, inps, inp_ixes, seed), f)
+            seed += 1
+            torch.cuda.empty_cache()
+
+        # This is really quite bad and broken and we should set it up so evaluate.py is the
+        # standard way of using results. This probably looks like always just saving the results,
+        # and having a call to experiments.py also by default call evaluate.py afterwards to print
+        # the desired results
+        # In practice, the return value of this function is almost nowhere used and was added for
+        # ad hoc purposes in the first place.
+        return _, _, _, _
+
+    model, _, tokenizer, toks = construct_circuit(**options)
+    ds = Dataset(arrs={"toks_int_var": toks})
+
+    eval_settings = ExperimentEvalSettings(device_dtype=DEVICE, batch_size=100, run_on_all=True)
     exp = Experiment(model, ds, corr, num_examples=samples, random_seed=SEED)
     scrubbed_circuit = exp.scrub()
 

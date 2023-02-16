@@ -467,6 +467,7 @@ def main():
     parser.add_argument("--attns", action="store_true", dest="attns")
     parser.add_argument("--attn-scores", action="store_true", dest="attn_scores")
     parser.add_argument("--save", action="store_true", dest="save")
+    parser.add_argument("--positional-scrub", action="store_true", dest="positional_scrub")
     parser.add_argument(
         "--idx",
         action="store",
@@ -489,7 +490,7 @@ def main():
             else:
                 save_name += f"_saa_{args.idx}"
 
-    run_experiment(experiments, args.exp_name, args.samples, save_name, args.verbose, args.attns, args.attn_scores)
+    run_experiment(experiments, args.exp_name, args.samples, save_name, args.verbose, args.attns, args.attn_scores, args.positional_scrub)
     torch.cuda.empty_cache()
 
 

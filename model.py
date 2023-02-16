@@ -54,6 +54,7 @@ def construct_circuit(
     make_pth_diag: list = [],
     split_with_projection: list = [],
     split_paths_by_position: list = [],
+    save_name: str = "",
 ):
     """Load the 2L attn-only model and make circuit that calculates loss on the dataset, with empty inputs"""
 
@@ -85,6 +86,16 @@ def construct_circuit(
     good_induction_candidate = torch.load(f"{CACHE_DIR}/induction_candidates_2022-10-15 04:48:29.970735.pt").to(
         device=DEVICE, dtype=torch.float32
     )
+
+    # If save_name was provided, try to load the cached circuit
+    if save_name:
+        try:
+            with open(f"data/models/{save_name}.txt", "r") as f:
+                circ_str = f.read()
+            model = rc.Parser()(circ_str)
+            return model, good_induction_candidate, tokenizer, toks_int_values
+        except FileNotFoundError:
+            print("Could not find saved model. Building anew...")
 
     by_head = configure_transformer(
         loss.get_unique("t.bind_w"),
@@ -257,7 +268,10 @@ def construct_circuit(
     split_children = set()
     split_inputs = set()
     for l1h, child, l0hs, num_toks_back, num_toks_to_include in split_paths_by_position:
-        child_matcher = rc.restrict("b1").chain(rc.Matcher(rc.Regex(r"b1\.a\.head" + str(l1h)))).chain(rc.restrict(f"a.{child}", term_early_at="b0", term_if_matches=True))
+        # Heavily restricted matchers as a matter of performance, rather than functionality
+        child_matcher = rc.restrict("b1").chain(
+                        rc.restrict(rc.Regex(r"b1.a.head" + str(l1h)), term_early_at=rc.Regex(r"b0"))).chain(
+                        rc.restrict(f"a.{child}", term_early_at=rc.Regex(r"b0"), term_if_matches=True))
         if (l1h, child) not in split_children:
             model = model.update(child_matcher.chain(rc.Matcher("b0")),
                                 lambda c: rc.Concat(*[rc.Index(c, I[i:i+1], name=f"b0[{i}]") for i in range(SEQ_LEN)], axis=0, name="b0.concat")
@@ -268,7 +282,10 @@ def construct_circuit(
             for i in range(SEQ_LEN):
                 left_boundary = max(i - num_toks_back, 0)
                 right_boundary = i - num_toks_back + num_toks_to_include
-                input_matcher = child_matcher.chain(rc.Matcher(f"b0[{i}]")).chain(f"b0.a.head{h}").chain("input_toks_int")
+                input_matcher = child_matcher.chain(
+                                rc.restrict(f"b0[{i}]", term_early_at=rc.Regex(r"^b0$"))).chain(
+                                rc.restrict(f"b0.a.head{h}", term_early_at="a.comb_v")).chain(
+                                rc.Matcher("input_toks_int"))
                 model = model.update(input_matcher, lambda c: rc.Concat(rc.Index(c, I[:left_boundary], name="outside_input_toks_int"),
                                                                         rc.Index(c, I[left_boundary:right_boundary], name="inside_input_toks_int"),
                                                                         rc.Index(c, I[right_boundary:], name="outside_input_toks_int"),
@@ -276,6 +293,9 @@ def construct_circuit(
                 ))
             split_inputs.add((l1h, child, h))
 
+    if save_name:
+        with open(f"data/models/{save_name}.txt", "w") as f:
+            f.write(rc.PrintOptions().repr(model))
     return model, good_induction_candidate, tokenizer, toks_int_values
 
 
