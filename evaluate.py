@@ -11,11 +11,11 @@ def load_exp_results(exp_name):
     or results/positional_scrubs/{exp_name}_*.pkl
     '''
     try:
+        return consolidate_results(exp_name, "positional_scrubs")
+    except FileNotFoundError:
         with open(f"results/{exp_name}.pkl", "rb") as f:
             res, ixes, _ = pickle.load(f)
             return res, ixes
-    except FileNotFoundError:
-        return consolidate_results(exp_name, "positional_scrubs")
     
 
 def filter_and_align(res, ixes, common_ixes):
@@ -57,7 +57,7 @@ def main():
         action="store",
         dest="exp_eval",
         type=str,
-        default="positional-unscrubbed",
+        default="unscrubbed",
         help="Experiment to evaluate",
     )
     parser.add_argument(
@@ -65,7 +65,7 @@ def main():
         action="store",
         dest="exp_baseline",
         type=str,
-        default="positional-baseline",
+        default="baseline",
         help="Baseline experiment to compare --exp against for the recovery calculation"
     )
     parser.add_argument(
@@ -73,7 +73,7 @@ def main():
         action="store",
         dest="exp_target",
         type=str,
-        default="positional-unscrubbed",
+        default="unscrubbed",
         help="Target experiment to compare --exp against"
     )
     parser.add_argument(

@@ -54,11 +54,11 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
         seed = SEED
         eval_settings = ExperimentEvalSettings(
             device_dtype=DEVICE,
-            batch_size=4,
+            batch_size=32,
             run_on_all=True,
             optim_settings=rc.OptimizationSettings(scheduling_naive=True)
         )
-        for i in tqdm(range(100)):
+        for i in tqdm(range(80)):
             try:
                 with open(f"results/positional_scrubs/{exp_name}_{i}.pkl", "rb") as f:
                     print("Skipping", i)
@@ -66,7 +66,7 @@ def run_experiment(exps, exp_name, samples=10000, save_name="", verbose=0, get_a
                     continue
             except FileNotFoundError:
                 pass
-            exp = Experiment(model, ds, corr, num_examples=100, random_seed=seed)
+            exp = Experiment(model, ds, corr, num_examples=128, random_seed=seed)
             scrubbed_circuit = exp.scrub()
 
             inps = get_inputs_from_model(scrubbed_circuit.circuit)

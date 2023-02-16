@@ -196,11 +196,92 @@ def make_experiments(
         ]}
     )
 
+    res["positional-pth-k"] = make_corr(
+        [ind_heads.chain("a.k").chain("outside_input_toks_int") | ind_heads.chain("a.k").chain(embeds)],
+        options={"split_paths_by_position": [
+            (5, "k", [0, 1, 2, 3, 4, 5, 6, 7], 1, 1),
+            (6, "k", [0, 1, 2, 3, 4, 5, 6, 7], 1, 1),
+        ]}
+    )
+
+    # positional eq + ev + pth-k
+    res["positional-all-naive"] = make_corr(
+        [ind_heads.chain("outside_input_toks_int") | ind_heads.chain("a.k").chain(embeds)],
+        options={"split_paths_by_position": [
+            (5, "v", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
+            (6, "v", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
+            (5, "q", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
+            (6, "q", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
+            (5, "k", [0, 1, 2, 3, 4, 5, 6, 7], 1, 1),
+            (6, "k", [0, 1, 2, 3, 4, 5, 6, 7], 1, 1),
+        ]}
+    )
+
+    # Same as above but with 3-tok induction context, rather than 1
+    res["positional-all-naive-with-multi-tok-ind"] = make_corr(
+        [ind_heads.chain(rc.Matcher("outside_input_toks_int")) | ind_heads.chain("a.k").chain(embeds)],
+        options={"split_paths_by_position": [
+            (5, "v", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
+            (6, "v", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
+            (5, "q", [0, 1, 2, 3, 4, 5, 6, 7], 2, 3),
+            (6, "q", [0, 1, 2, 3, 4, 5, 6, 7], 2, 3),
+            (5, "k", [0, 1, 2, 3, 4, 5, 6, 7], 3, 3),
+            (6, "k", [0, 1, 2, 3, 4, 5, 6, 7], 3, 3),
+        ]}
+    )
+
+    # Same as above but only for 1.5
+    res["positional-all-naive-with-multi-tok-ind-1.5"] = make_corr(
+        [rc.Matcher("b1.a.head5").chain(rc.Matcher("outside_input_toks_int")) | rc.Matcher("b1.a.head5").chain("a.k").chain(embeds)],
+        options={"split_paths_by_position": [
+            (5, "v", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
+            (5, "q", [0, 1, 2, 3, 4, 5, 6, 7], 2, 3),
+            (5, "k", [0, 1, 2, 3, 4, 5, 6, 7], 3, 3),
+        ]}
+    )
+
+    # Same as above but only for 1.6
+    res["positional-all-naive-with-multi-tok-ind-1.6"] = make_corr(
+        [rc.Matcher("b1.a.head6").chain(rc.Matcher("outside_input_toks_int")) | rc.Matcher("b1.a.head6").chain("a.k").chain(embeds)],
+        options={"split_paths_by_position": [
+            (6, "v", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
+            (6, "q", [0, 1, 2, 3, 4, 5, 6, 7], 2, 3),
+            (6, "k", [0, 1, 2, 3, 4, 5, 6, 7], 3, 3),
+        ]}
+    )
+
+    # Same as multi-tok-ind-1.5 but with current tok included for keys
+    res["positional-all-naive-with-multi-tok-ind-1.5-with-positional-ek"] = make_corr(
+        [ind_heads.chain(rc.Matcher("outside_input_toks_int"))],
+        options={"split_paths_by_position": [
+            (5, "v", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
+            (5, "q", [0, 1, 2, 3, 4, 5, 6, 7], 2, 3),
+            (5, "k", [0, 1, 2, 3, 4, 5, 6, 7], 3, 4),
+        ]}
+    )
+
+    # Same as above but for 1.6
+    res["positional-all-naive-with-multi-tok-ind-1.6-with-positional-ek"] = make_corr(
+        [ind_heads.chain(rc.Matcher("outside_input_toks_int"))],
+        options={"split_paths_by_position": [
+            (6, "v", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
+            (6, "q", [0, 1, 2, 3, 4, 5, 6, 7], 2, 3),
+            (6, "k", [0, 1, 2, 3, 4, 5, 6, 7], 3, 4),
+        ]}
+    )
+
     res["positional-ek"] = make_corr(
         [ind_heads.chain(rc.Matcher("outside_input_toks_int"))],
         options={"split_paths_by_position": [
             (5, "k", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
             (6, "k", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
+        ]}
+    )
+
+    res["positional-ek-1.5"] = make_corr(
+        [ind_heads.chain(rc.Matcher("outside_input_toks_int"))],
+        options={"split_paths_by_position": [
+            (5, "k", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
         ]}
     )
 
@@ -252,6 +333,37 @@ def make_experiments(
             (5, "k", [1, 2, 3, 5], 0, 1),
             (5, "k", [0, 6], 2, 3),
             (6, "k", [0, 6], 2, 3),
+        ]}
+    )
+
+    # For both 1.5 and 1.6, limit values to current positions through heads 0.12356 and skip connection
+    # For both 1.5 and 1.6, limit queries to most recent three positions through 0.06,
+    # and current position through 0.1235 and skip connection
+    # For 1.5, limit keys to the three previous positions through 0.06, and the current
+    # position through 0.12356 and skip connection
+    # For 1.6, limit keys to the three previous positions through 0.06
+    res["positional-all-naive-with-multi-tok-ind-with-1.5-positional-ek-fine-grained"] = make_corr(
+        [
+            (
+                ind_heads.chain(rc.Matcher("outside_input_toks_int")) |
+                ind_heads.chain("a.v").chain(rc.Regex("b0.a.head[047]")) |
+                ind_heads.chain("a.q").chain(rc.Regex("b0.a.head[47]")) |
+                rc.Matcher("b1.a.head5").chain("a.k").chain(rc.Regex("b0.a.head[47]")) |
+                rc.Matcher("b1.a.head6").chain("a.k").chain(rc.Regex("b0.a.head[123457]")) |
+                rc.Matcher("b1.a.head6").chain("a.k").chain(embeds)
+            ),
+         ],
+        options={"split_paths_by_position": [
+            (5, "v", [1, 2, 3, 5, 6], 0, 1),
+            (6, "v", [1, 2, 3, 5, 6], 0, 1),
+            (5, "q", [0, 6], 2, 3),
+            (5, "q", [1, 2, 3, 5], 0, 1),
+            (6, "q", [0, 6], 2, 3),
+            (6, "q", [1, 2, 3, 5], 0, 1),
+            (5, "k", [0], 3, 3),
+            (5, "k", [6], 3, 4),
+            (5, "k", [1, 2, 3, 5], 0, 1),
+            (6, "k", [0, 6], 3, 3),
         ]}
     )
 
