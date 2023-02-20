@@ -227,7 +227,50 @@ def make_experiments(
         ]}
     )
 
-    # positional eq + pth-k but with longer induction context
+    # positional eq + pth-k
+    res["positional-eq-and-pth-k"] = make_corr(
+        [
+            (
+                rc.IterativeMatcher("outside_input_toks_int") |
+                ind_heads.chain(rc.restrict("a.k", term_early_at="b0.a")).chain(rc.restrict("idxed_embeds", term_early_at="b0.a"))
+            )
+        ],
+        options={"split_paths_by_position": [
+            (5, "q", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
+            (6, "q", [0, 1, 2, 3, 4, 5, 6, 7], 0, 1),
+            (5, "k", [0, 1, 2, 3, 4, 5, 6, 7], 1, 1),
+            (6, "k", [0, 1, 2, 3, 4, 5, 6, 7], 1, 1),
+        ]}
+    )
+
+    # Same as positional-eq but with longer induction context
+    res["positional-eq-with-multi-tok-ind"] = make_corr(
+        [
+            (
+                rc.IterativeMatcher("outside_input_toks_int")
+            )
+        ],
+        options={"split_paths_by_position": [
+            (5, "q", [0, 1, 2, 3, 4, 5, 6, 7], 2, 3),
+            (6, "q", [0, 1, 2, 3, 4, 5, 6, 7], 2, 3),
+        ]}
+    )
+
+    # Same as positional-pth-k but with longer induction context
+    res["positional-pth-k-with-multi-tok-ind"] = make_corr(
+        [
+            (
+                rc.IterativeMatcher("outside_input_toks_int") |
+                ind_heads.chain(rc.restrict("a.k", term_early_at="b0.a")).chain(rc.restrict("idxed_embeds", term_early_at="b0.a"))
+            )
+        ],
+        options={"split_paths_by_position": [
+            (5, "k", [0, 1, 2, 3, 4, 5, 6, 7], 3, 3),
+            (6, "k", [0, 1, 2, 3, 4, 5, 6, 7], 3, 3),
+        ]}
+    )
+
+    # Same as positional-eq-and-pth-k but with longer induction context
     res["positional-eq-and-pth-k-with-multi-tok-ind"] = make_corr(
         [
             (
@@ -243,8 +286,7 @@ def make_experiments(
         ]}
     )
 
-
-    # Same as above but with positional-eq as well
+    # Same as above but with positional-ev as well
     res["positional-all-naive-with-multi-tok-ind"] = make_corr(
         [
             (
