@@ -38,6 +38,8 @@ def consolidate_results(exp_name, results_subdir):
     Assume they were pickled as res, _, inp_ixes, _
     '''
     exp_fns = glob.glob(f"results/{results_subdir}/{exp_name}_*.pkl")
+    if not exp_fns:
+        raise FileNotFoundError
     all_res = []
     all_inp_ixes = []
     for fn in exp_fns:
@@ -82,8 +84,15 @@ def main():
         dest="expected_loss",
         help="Whether to calculate loss recoveries (set this flag) or behavior recoveries (don't set this flag)"
     )
+    parser.add_argument(
+        "-s",
+        action="store_true",
+        dest="squared_distance",
+        help="Whether to calculate squared distance (set this flag) or absolute distance (don't set this flag) for behavior recoveries. Assumes -e flag was NOT set."
+    )
     
     args = parser.parse_args()
+    assert not(args.expected_loss and args.squared_distance)
     
     exp_eval_res, exp_eval_ixes = load_exp_results(args.exp_eval)
     exp_baseline_res, exp_baseline_ixes = load_exp_results(args.exp_baseline)
@@ -103,8 +112,9 @@ def main():
     assert torch.all(exp_eval_ixes == exp_target_ixes)
     
     if not args.expected_loss:
-        exp_baseline_res = torch.abs(exp_target_res - exp_baseline_res)
-        exp_eval_res = torch.abs(exp_target_res - exp_eval_res)
+        dist_func = torch.square if args.squared_distance else torch.abs
+        exp_baseline_res = dist_func(exp_target_res - exp_baseline_res)
+        exp_eval_res = dist_func(exp_target_res - exp_eval_res)
 
     all_masks = get_all_masks(exp_eval_ixes)
     evals = [
