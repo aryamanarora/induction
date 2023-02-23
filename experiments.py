@@ -120,6 +120,16 @@ def make_experiments(
 
     # BASELINE
     res["baseline"] = make_corr([ind_heads])
+    res["baseline-decohered-by-child"] = make_corr([ind_v, ind_q, ind_k])
+    res["baseline-decohered-by-head-and-child"] = make_corr([
+        rc.Matcher("b1.a.head5").chain(rc.restrict("a.v", term_early_at="b0")),
+        rc.Matcher("b1.a.head5").chain(rc.restrict("a.q", term_early_at="b0")),
+        rc.Matcher("b1.a.head5").chain(rc.restrict("a.k", term_early_at="b0")),
+        rc.Matcher("b1.a.head6").chain(rc.restrict("a.v", term_early_at="b0")),
+        rc.Matcher("b1.a.head6").chain(rc.restrict("a.q", term_early_at="b0")),
+        rc.Matcher("b1.a.head6").chain(rc.restrict("a.k", term_early_at="b0")),
+
+    ])
     res["not-baseline"] = make_corr([non_ind_heads])
     res["not-baseline-full"] = make_corr(
         [non_ind_heads | rc.IterativeMatcher(rc.restrict("b0", term_early_at="b1.a"))]
@@ -286,7 +296,23 @@ def make_experiments(
         ]}
     )
 
-    # Same as above but with positional-ev as well
+    # Same as above but with positional-ek for 1.5
+    res["positional-eq-and-pth-k-with-multi-tok-ind-with-1.5-positional-ek"] = make_corr(
+        [
+            (
+                rc.IterativeMatcher("outside_input_toks_int") |
+                rc.IterativeMatcher("b1.a.head6").chain(rc.restrict("a.k", term_early_at="b0.a")).chain(rc.restrict("idxed_embeds", term_early_at="b0.a"))
+            )
+        ],
+        options={"split_paths_by_position": [
+            (5, "q", [0, 1, 2, 3, 4, 5, 6, 7], 2, 3),
+            (6, "q", [0, 1, 2, 3, 4, 5, 6, 7], 2, 3),
+            (5, "k", [0, 1, 2, 3, 4, 5, 6, 7], 3, 4),
+            (6, "k", [0, 1, 2, 3, 4, 5, 6, 7], 3, 3),
+        ]}
+    )
+
+    # Same as positional-eq-and-pth-k-with-multi-tok-ind but with positional-ev as well
     res["positional-all-naive-with-multi-tok-ind"] = make_corr(
         [
             (
