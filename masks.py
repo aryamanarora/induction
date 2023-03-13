@@ -125,6 +125,7 @@ def get_all_masks(inp_ixes=None):
 
     untop_200 = build_token_frequency_mask(200)[inp_ixes]
     uncommon_repeats = repeats.logical_and(untop_200[:, 1:])
+    not_uncommon_repeats = uncommon_repeats.logical_not()
 
     with open(os.path.join(DATA_PATH, "masks", "mask_ends_of_repeated_bigrams.pkl"), "rb") as f:
         erb = pickle.load(f)[inp_ixes][:, 1:]
@@ -132,6 +133,9 @@ def get_all_masks(inp_ixes=None):
     nerb = erb.logical_not()
     candidate_erb = induction_candidates.logical_and(erb)
     nerb_uncommon_repeats = nerb.logical_and(uncommon_repeats)
+    c_uncommon_repeats = induction_candidates.logical_and(uncommon_repeats)
+    nc = induction_candidates.logical_not()
+    nc_uncommon_repeats = nc.logical_and(uncommon_repeats)
 
     with open(os.path.join(DATA_PATH, "masks", "mask_simple_strip_fuzzy_ends_of_repeated_bigrams.pkl"), "rb") as f:
         ferb = pickle.load(f)[inp_ixes][:, 1:]
@@ -155,6 +159,7 @@ def get_all_masks(inp_ixes=None):
         "repeat_candidates"          : repeat_candidates,
         "repeats"                    : repeats,
         "uncommon_repeats"           : uncommon_repeats,
+        "not_uncommon_repeats"       : not_uncommon_repeats,
         "erb"                        : erb,
         "ferb"                       : ferb,
         "ferbnerb"                   : ferbnerb,
@@ -166,4 +171,6 @@ def get_all_masks(inp_ixes=None):
         "nferb_uncommon_repeats"     : nferb_uncommon_repeats,
         "nferbnerb_uncommon_repeats" : nferbnerb_uncommon_repeats,
         "misleading_induction"       : misleading_induction,
+        "c_uncommon_repeats"         : c_uncommon_repeats,
+        "nc_uncommon_repeats"        : nc_uncommon_repeats,
     }
