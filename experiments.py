@@ -404,11 +404,7 @@ def main():
         "--exp", action="store", dest="exp_name", type=str, choices=list(experiments.keys()), default="unscrubbed"
     )
     parser.add_argument("--samples", action="store", dest="samples", type=int, default=10000)
-    parser.add_argument("--verbose", action="store", dest="verbose", type=int, default=0)
-    parser.add_argument("--attns", action="store_true", dest="attns")
-    parser.add_argument("--attn-scores", action="store_true", dest="attn_scores")
     parser.add_argument("--save", action="store_true", dest="save")
-    parser.add_argument("--positional-scrub", action="store_true", dest="positional_scrub")
     parser.add_argument(
         "--idx",
         action="store",
@@ -420,18 +416,12 @@ def main():
     args = parser.parse_args()
     print(args)
 
-    save_name = ""
-    if args.save:
-        save_name = args.exp_name
+    save_name = args.exp_name
     if args.idx is not None:
         experiments = make_experiments(partial(make_corr, sampler=FixedSampler(args.idx)))
-        if args.save:
-            if args.attns:
-                save_name += f"_attns_{args.idx}"
-            else:
-                save_name += f"_saa_{args.idx}"
+        save_name = f"{args.exp_name}_saa_{args.idx}"
 
-    run_experiment(experiments, args.exp_name, args.samples, save_name, args.verbose, args.attns, args.attn_scores, args.positional_scrub)
+    run_experiment(experiments, args.exp_name, args.samples, save_name)
     torch.cuda.empty_cache()
 
 

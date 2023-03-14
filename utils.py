@@ -146,6 +146,31 @@ def split_circuit_with_projection(projection_name, circuit):
     return projection_recon
 
 
+def consolidate_results(exp_names):
+    """
+    Consolidate results from positional scrubs' SAA experiments into
+    a single file for each sample index for each experiment.
+    """
+    for exp_name in exp_names:
+        exp_fns = sorted(glob.glob(f"results/positional_scrubs/saa/{exp_name}_saa_*.pkl"))
+        exp_ixes = {int(fn.split("_")[-2]) for fn in exp_fns}
+        for ix in exp_ixes:
+            exps = [fn for fn in exp_fns if int(fn.split("_")[-2]) == ix]
+            all_res = []
+            all_ixes = []
+            all_seeds = []
+            for fn in exps:
+                with open(fn, "rb") as f:
+                    res, ixes, seed = pickle.load(f)
+                    all_res.append(res)
+                    all_ixes.append(ixes)
+                    all_seeds.append(seed["seed"])
+            all_res = torch.cat(all_res, dim=0)
+            all_ixes = torch.cat(all_ixes, dim=0)
+            with open(f"results/{exp_name}_saa_{ix}.pkl", "wb") as f:
+                pickle.dump((all_res, all_ixes, {"seeds": all_seeds}), f)
+
+
 def tok_stdize_simple_strip(all_tok_strs, tok_ix):
     return all_tok_strs[tok_ix].upper().strip(' ()[]{},.:;-_"')
 
@@ -265,6 +290,7 @@ def compare_saa_in_cui(comparisons, ix_filter=None, mask=None):
     inps = load_inputs()[:, :-1]
     tokenizer = load_tokenizer()
     all_exps = {exp for exp_pair in comparisons for exp in exp_pair}
+    consolidate_results(all_exps)
     common_ixes = list(get_common_saa_ixes(all_exps, ix_filter))
     all_loss_diffs = []
     for ix in common_ixes:

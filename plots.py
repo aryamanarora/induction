@@ -2,35 +2,11 @@ import glob
 import pickle
 import torch
 from masks import get_all_masks
+from utils import consolidate_results
 
 import plotly.express as px
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
-
-
-def consolidate_results(exp_name):
-    """
-    Consolidate results from positional scrubbing SAA experiments into
-    a single file for each sample index.
-    """
-    exp_fns = sorted(glob.glob(f"results/positional_scrubs/saa/{exp_name}_saa_*.pkl"))
-    exp_ixes = {int(fn.split("_")[-2]) for fn in exp_fns}
-    for ix in exp_ixes:
-        exps = [fn for fn in exp_fns if int(fn.split("_")[-2]) == ix]
-        all_res = []
-        all_ixes = []
-        all_seeds = []
-        for fn in exps:
-            with open(fn, "rb") as f:
-                res, ixes, seed = pickle.load(f)
-                all_res.append(res)
-                all_ixes.append(ixes)
-                all_seeds.append(seed["seed"])
-        all_res = torch.cat(all_res, dim=0)
-        all_ixes = torch.cat(all_ixes, dim=0)
-        with open(f"results/{exp_name}_saa_{ix}.pkl", "wb") as f:
-            pickle.dump((all_res, all_ixes, {"seeds": all_seeds}), f)
-            print(f"Saved {exp_name}_saa_{ix}.pkl")
 
 
 def get_mean_losses(exp_name, sample_ix):
@@ -61,6 +37,7 @@ def plot_loss_diff_histogram(exp_name, mask_names=None, ceil=1.0):
     If mask_names is provided, mask the results before plotting for each mask_name
     ceil is the maximum y-axis value.
     """
+    consolidate_results({exp_name})
     losses, unscrubbed_losses, inp_ixes = get_loss_tensors_and_ixes(exp_name)
     losses = losses - unscrubbed_losses
     all_masks = get_all_masks(inp_ixes)
@@ -113,5 +90,4 @@ def plot_loss_scatterplot(exp_name, mask_name=None):
     fig.show()
 
 if __name__ == "__main__":
-    consolidate_results("unscrubbed")
     plot_loss_diff_histogram("positional-all-naive-with-multi-tok-ind", ["not_uncommon_repeats", "uncommon_repeats"], ceil=0.01)
